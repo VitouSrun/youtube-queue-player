@@ -46,6 +46,14 @@
         ::-webkit-scrollbar-track { background: #1e293b; }
         ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+            animation: fadeIn 0.25s ease-out forwards;
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 flex flex-col md:flex-row overflow-hidden">
@@ -194,6 +202,7 @@
         let progressInterval = null;
         let isSeeking = false;
         let recentlyClearedQueue = null;
+        let currentSuggestion = null;
 
         // Register Service Worker
         if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
@@ -277,6 +286,314 @@
             { id: 'dQw4w9WgXcQ', title: 'Rick Astley - Never Gonna Give You Up', duration: '3:33' },
             { id: '9bZkp7q19f0', title: 'PSY - GANGNAM STYLE(강남스타일) M/V', duration: '4:13' }
         ];
+
+        // Curated suggestions catalog with artist and keyword metadata for smart matching
+        const suggestionCatalog = [
+            // Lofi & Chill
+            { id: 'jfKfPfyJRdk', title: 'Lofi hip hop radio - beats to relax/study to', artist: 'Lofi Girl', genre: 'Lofi & Chill', keywords: ['lofi', 'chill', 'study', 'relax', 'beats', 'sleep'] },
+            { id: '5qap5aO4i9A', title: 'lofi hip hop radio - beats to sleep/chill to', artist: 'Lofi Girl', genre: 'Lofi & Chill', keywords: ['lofi', 'chill', 'sleep', 'relax', 'night', 'beats'] },
+            { id: 'L_LUpnjgPso', title: 'Chillhop Radio - jazzy & lofi hip hop beats', artist: 'Chillhop Music', genre: 'Lofi & Chill', keywords: ['chillhop', 'jazz', 'lofi', 'beats', 'instrumental'] },
+            { id: '7NOSDKb0HlU', title: 'cozy winter lofi beats - chill lofi hip hop', artist: 'ChilledCow', genre: 'Lofi & Chill', keywords: ['winter', 'cozy', 'chill', 'lofi', 'relax'] },
+
+            // Synthwave & Retro
+            { id: 'DWcJFNfaw90', title: 'Synthwave Radio - chill synth / retro beats', artist: 'Lofi Girl Synthwave', genre: 'Synthwave', keywords: ['synthwave', 'synth', 'retro', '80s', 'cyberpunk', 'outrun'] },
+            { id: '4xDzrJKXOOY', title: 'The Midnight - Sunset', artist: 'The Midnight', genre: 'Synthwave', keywords: ['the midnight', 'synthwave', 'retro', '80s', 'sunset'] },
+            { id: 'MV_3Dpw-BRY', title: 'Kavinsky - Nightcall', artist: 'Kavinsky', genre: 'Synthwave', keywords: ['kavinsky', 'nightcall', 'drive', 'synthwave', 'electro'] },
+            { id: '4XpnKHLe6s8', title: 'HOME - Resonance', artist: 'HOME', genre: 'Synthwave', keywords: ['home', 'resonance', 'chillwave', 'synthwave', 'retro'] },
+
+            // Pop & Global Hits
+            { id: 'JGwWNGJdvx8', title: 'Ed Sheeran - Shape of You', artist: 'Ed Sheeran', genre: 'Pop', keywords: ['ed sheeran', 'pop', 'dance', 'chart', 'hits'] },
+            { id: '2Vv-BfVoq4g', title: 'Ed Sheeran - Perfect', artist: 'Ed Sheeran', genre: 'Acoustic Pop', keywords: ['ed sheeran', 'perfect', 'acoustic', 'love', 'ballad'] },
+            { id: '09R8_2nJtjg', title: 'Maroon 5 - Sugar', artist: 'Maroon 5', genre: 'Pop', keywords: ['maroon 5', 'sugar', 'pop', 'hits', 'adam levine'] },
+            { id: 'hT_nvWreIhg', title: 'OneRepublic - Counting Stars', artist: 'OneRepublic', genre: 'Pop Rock', keywords: ['onerepublic', 'counting stars', 'pop', 'rock', 'hits'] },
+            { id: 'OPf0YbXqDm0', title: 'Mark Ronson - Uptown Funk ft. Bruno Mars', artist: 'Mark Ronson', genre: 'Funk & Pop', keywords: ['bruno mars', 'uptown funk', 'funk', 'pop', 'dance'] },
+            { id: 'dQw4w9WgXcQ', title: 'Rick Astley - Never Gonna Give You Up', artist: 'Rick Astley', genre: 'Pop Classic', keywords: ['rick astley', 'pop', '80s', 'dance', 'classic'] },
+            { id: 'YQHsXMglC9A', title: 'Adele - Hello', artist: 'Adele', genre: 'Pop & Soul', keywords: ['adele', 'hello', 'soul', 'pop', 'ballad'] },
+
+            // Rock & Alternative
+            { id: 'kXYiU_JCYtU', title: 'Linkin Park - Numb', artist: 'Linkin Park', genre: 'Rock', keywords: ['linkin park', 'numb', 'rock', 'alternative', 'metal', 'chester'] },
+            { id: 'eVTXPUF4Oz4', title: 'Linkin Park - In The End', artist: 'Linkin Park', genre: 'Rock', keywords: ['linkin park', 'in the end', 'rock', 'alternative', 'metal'] },
+            { id: 'fJ9rUzIMcZQ', title: 'Queen - Bohemian Rhapsody', artist: 'Queen', genre: 'Rock', keywords: ['queen', 'bohemian rhapsody', 'rock', 'classic rock', 'freddie mercury'] },
+            { id: '1w7OgIMMRc4', title: 'Guns N Roses - Sweet Child O Mine', artist: 'Guns N Roses', genre: 'Rock', keywords: ['guns n roses', 'slash', 'rock', 'classic rock', 'guitar'] },
+            { id: 'hTWKbfoikeg', title: 'Nirvana - Smells Like Teen Spirit', artist: 'Nirvana', genre: 'Grunge & Rock', keywords: ['nirvana', 'kurt cobain', 'grunge', 'rock', 'teen spirit'] },
+
+            // K-Pop & Dance
+            { id: '9bZkp7q19f0', title: 'PSY - GANGNAM STYLE (강남스타일)', artist: 'PSY', genre: 'K-Pop', keywords: ['psy', 'gangnam style', 'k-pop', 'kpop', 'dance', 'korean'] },
+
+            // Latin & Rhythm
+            { id: 'kJQP7kiw5Fk', title: 'Luis Fonsi - Despacito ft. Daddy Yankee', artist: 'Luis Fonsi', genre: 'Latin Pop', keywords: ['luis fonsi', 'despacito', 'latin', 'reggaeton', 'spanish', 'dance'] }
+        ];
+
+        const genreKeywordRules = [
+            { genre: 'Synthwave', keywords: ['synthwave', 'retrowave', 'synth', 'cyberpunk', 'outrun', 'vaporwave', '80s'] },
+            { genre: 'Lofi & Chill', keywords: ['lofi', 'chillhop', 'study beats', 'relaxing beats', 'sleep beats', 'ambient', 'chill', 'relax', 'beats'] },
+            { genre: 'Rock', keywords: ['rock', 'metal', 'grunge', 'punk', 'alternative', 'guitar', 'rhapsody', 'band'] },
+            { genre: 'Acoustic Pop', keywords: ['acoustic', 'unplugged', 'piano', 'fingerstyle', 'coffee', 'ballad'] },
+            { genre: 'Pop', keywords: ['pop', 'hits', 'chart', 'dance', 'funk', 'disco', 'sugar', 'stars'] },
+            { genre: 'K-Pop', keywords: ['kpop', 'k-pop', 'korean', 'gangnam'] },
+            { genre: 'Latin Pop', keywords: ['latin', 'reggaeton', 'spanish', 'despacito'] }
+        ];
+
+        const knownArtistGenreMap = {
+            'linkin park': 'Rock',
+            'queen': 'Rock',
+            'guns n roses': 'Rock',
+            'nirvana': 'Rock',
+            'rick astley': 'Pop',
+            'ed sheeran': 'Pop',
+            'adele': 'Pop',
+            'maroon 5': 'Pop',
+            'onerepublic': 'Pop',
+            'bruno mars': 'Pop',
+            'mark ronson': 'Pop',
+            'psy': 'K-Pop',
+            'lofi girl': 'Lofi & Chill',
+            'chilledcow': 'Lofi & Chill',
+            'chillhop': 'Lofi & Chill',
+            'the midnight': 'Synthwave',
+            'kavinsky': 'Synthwave',
+            'home': 'Synthwave',
+            'luis fonsi': 'Latin Pop'
+        };
+
+        function extractTrackMetadata(title, author = '') {
+            let clean = (title || '')
+                .replace(/\[[^\]]*\]/g, '')
+                .replace(/\([^\)]*(?:official|video|audio|lyrics|remaster|hd|4k|mv|explicit)[^\)]*\)/gi, '')
+                .replace(/\|.*$/g, '')
+                .trim();
+
+            let artist = '';
+            let trackName = clean;
+            if (clean.includes(' - ')) {
+                const parts = clean.split(' - ');
+                artist = parts[0].trim();
+                trackName = parts.slice(1).join(' - ').trim();
+            } else if (clean.includes(': ')) {
+                const parts = clean.split(': ');
+                artist = parts[0].trim();
+                trackName = parts.slice(1).join(': ').trim();
+            } else if (author) {
+                artist = author.replace(/ - Topic$/i, '').replace(/VEVO$/i, '').trim();
+            }
+
+            const searchBlob = `${clean} ${author} ${artist}`.toLowerCase();
+            let detectedGenre = null;
+            let detectedArtist = null;
+
+            // 1. Check known artist match
+            for (const [art, gen] of Object.entries(knownArtistGenreMap)) {
+                if (searchBlob.includes(art)) {
+                    detectedArtist = art;
+                    detectedGenre = gen;
+                    break;
+                }
+            }
+
+            // 2. Check genre keywords if artist match didn't determine it
+            if (!detectedGenre) {
+                let bestScore = 0;
+                for (const rule of genreKeywordRules) {
+                    let score = 0;
+                    for (const kw of rule.keywords) {
+                        if (searchBlob.includes(kw)) {
+                            score += kw.length;
+                        }
+                    }
+                    if (score > bestScore) {
+                        bestScore = score;
+                        detectedGenre = rule.genre;
+                    }
+                }
+            }
+
+            return {
+                cleanTitle: clean,
+                artist: artist || detectedArtist,
+                detectedGenre: detectedGenre,
+                searchBlob
+            };
+        }
+
+        // Live YouTube suggestions cache & instances
+        const liveSuggestionsCache = new Map();
+        const INVIDIOUS_INSTANCES = [
+            'https://invidious.f5.si',
+            'https://inv.nadeko.net'
+        ];
+
+        async function fetchLiveRecommendedVideos(videoId) {
+            if (!videoId) return null;
+            if (liveSuggestionsCache.has(videoId)) {
+                return liveSuggestionsCache.get(videoId);
+            }
+
+            for (const instance of INVIDIOUS_INSTANCES) {
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3500);
+                    const response = await fetch(`${instance}/api/v1/videos/${videoId}`, {
+                        signal: controller.signal
+                    });
+                    clearTimeout(timeoutId);
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (Array.isArray(data.recommendedVideos) && data.recommendedVideos.length > 0) {
+                            const recs = data.recommendedVideos
+                                .filter(v => v && v.videoId && v.title)
+                                .map(v => ({
+                                    id: v.videoId,
+                                    title: v.title,
+                                    artist: v.author || '',
+                                    genre: 'Live Recommendation',
+                                    reason: 'Up Next on YouTube',
+                                    isLive: true
+                                }));
+                            if (recs.length > 0) {
+                                liveSuggestionsCache.set(videoId, recs);
+                                return recs;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    // Try next mirror
+                }
+            }
+            return null;
+        }
+
+        async function triggerLiveSuggestionFetch(videoId) {
+            if (!videoId || liveSuggestionsCache.has(videoId)) return;
+            try {
+                const recs = await fetchLiveRecommendedVideos(videoId);
+                if (recs && recs.length > 0) {
+                    liveSuggestionsCache.set(videoId, recs);
+                    // If user is currently playing this last video, smoothly update to live recommendation
+                    if (currentIndex >= 0 && currentIndex === queue.length - 1 && queue[currentIndex]?.id === videoId) {
+                        pickNextSuggestion(true);
+                        renderQueue();
+                    }
+                } else {
+                    liveSuggestionsCache.set(videoId, []);
+                }
+            } catch (e) {
+                liveSuggestionsCache.set(videoId, []);
+            }
+        }
+
+        function getAvailableSuggestions() {
+            return suggestionCatalog.filter(item => !queue.some(q => q.id === item.id));
+        }
+
+        function pickNextSuggestion(forceNew = false) {
+            const currentVideo = queue[currentIndex];
+            if (!currentVideo) {
+                currentSuggestion = null;
+                return null;
+            }
+
+            // 1. Check if we have live YouTube recommendations for current video
+            if (liveSuggestionsCache.has(currentVideo.id)) {
+                const liveList = (liveSuggestionsCache.get(currentVideo.id) || []).filter(item => !queue.some(q => q.id === item.id));
+                if (liveList.length > 0) {
+                    if (!forceNew && currentSuggestion && liveList.some(s => s.id === currentSuggestion.id)) {
+                        return currentSuggestion;
+                    }
+                    const pool = (forceNew && currentSuggestion) ? liveList.filter(s => s.id !== currentSuggestion.id) : liveList;
+                    const candidates = pool.length > 0 ? pool : liveList;
+                    currentSuggestion = candidates[Math.floor(Math.random() * candidates.length)];
+                    return currentSuggestion;
+                }
+            } else {
+                // Not yet fetched for this video: trigger async fetch in background
+                triggerLiveSuggestionFetch(currentVideo.id);
+            }
+
+            // 2. Smart local catalog fallback (if live not ready, offline, or empty)
+            const available = getAvailableSuggestions();
+            if (available.length === 0) {
+                currentSuggestion = null;
+                return null;
+            }
+
+            if (!forceNew && currentSuggestion && available.some(s => s.id === currentSuggestion.id)) {
+                return currentSuggestion;
+            }
+
+            let author = '';
+            if (player && typeof player.getVideoData === 'function') {
+                const data = player.getVideoData();
+                if (data && data.author) author = data.author;
+            }
+
+            const currentMeta = extractTrackMetadata(currentVideo.title, author);
+
+            // Score candidate suggestions based on extracted context
+            const scoredCandidates = available.map(candidate => {
+                let score = 0;
+                let reason = 'Curated pick';
+
+                if (currentMeta) {
+                    if (currentMeta.artist && candidate.artist.toLowerCase().includes(currentMeta.artist.toLowerCase())) {
+                        score += 70;
+                        reason = `More from ${candidate.artist}`;
+                    } else if (currentMeta.detectedGenre && candidate.genre.toLowerCase().includes(currentMeta.detectedGenre.toLowerCase())) {
+                        score += 50;
+                        reason = `Similar ${candidate.genre} vibe`;
+                    }
+
+                    for (const kw of candidate.keywords) {
+                        if (currentMeta.searchBlob.includes(kw)) {
+                            score += 15;
+                            if (reason === 'Curated pick') {
+                                reason = `Matches '${kw}'`;
+                            }
+                        }
+                    }
+                }
+
+                if (currentSuggestion && candidate.id === currentSuggestion.id) {
+                    score -= 100;
+                }
+
+                score += Math.random() * 8;
+
+                return {
+                    ...candidate,
+                    score,
+                    reason,
+                    isLive: false
+                };
+            });
+
+            scoredCandidates.sort((a, b) => b.score - a.score);
+            currentSuggestion = scoredCandidates[0];
+            return currentSuggestion;
+        }
+
+        function refreshSuggestion() {
+            pickNextSuggestion(true);
+            renderQueue();
+        }
+
+        function addCurrentSuggestion() {
+            if (!currentSuggestion) return;
+            addSuggestionToQueue(currentSuggestion.id, currentSuggestion.title);
+        }
+
+        function addSuggestionToQueue(id, title) {
+            if (!id) return;
+            if (queue.some(item => item.id === id)) {
+                showToast("Video is already in the queue", "info");
+                return;
+            }
+            queue.push({ id: id, title: title, addedAt: Date.now() });
+            currentSuggestion = null;
+            saveQueueToStorage();
+            renderQueue();
+            showToast("Added suggested video to queue!", "success");
+        }
 
         if (window.location.protocol === 'file:') {
             setTimeout(() => {
@@ -505,6 +822,7 @@
             countBadge.innerText = `${queue.length} item${queue.length === 1 ? '' : 's'}`;
 
             if (queue.length === 0) {
+                currentSuggestion = null;
                 container.innerHTML = `
                     <div id="queue-empty-state" class="h-full flex flex-col items-center justify-center text-center text-slate-500 p-4">
                         <i class="fa-solid fa-layer-group text-2xl sm:text-3xl mb-2 opacity-40"></i>
@@ -546,6 +864,71 @@
                     </div>
                 `;
             });
+
+            // If queue is currently playing the last video, show a suggested video card
+            if (currentIndex === queue.length - 1) {
+                const suggestion = pickNextSuggestion();
+                if (suggestion) {
+                    const safeSugId = escapeHtml(suggestion.id);
+                    const safeSugTitle = escapeHtml(suggestion.title);
+                    const safeSugGenre = escapeHtml(suggestion.artist || suggestion.genre || 'Recommended');
+                    const isLive = Boolean(suggestion.isLive);
+                    const badgeIcon = isLive ? 'fa-brands fa-youtube text-red-500' : 'fa-solid fa-bolt-lightning text-amber-400';
+                    const badgeText = isLive ? 'Live YouTube Up Next' : escapeHtml(suggestion.reason || 'Similar vibe');
+
+                    html += `
+                        <div class="pt-2 mt-2 border-t border-slate-800/80 animate-fadeIn">
+                            <div class="flex items-center justify-between mb-2 px-1">
+                                <div class="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                                    <span class="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-600/15 text-red-400 border border-red-500/20">
+                                        <i class="fa-solid fa-wand-magic-sparkles text-[9px]"></i>
+                                        <span>Suggested Up Next</span>
+                                    </span>
+                                    <span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700/60 truncate max-w-[170px] sm:max-w-none">
+                                        <i class="${badgeIcon} text-[9px] mr-0.5"></i>
+                                        <span>${badgeText}</span>
+                                    </span>
+                                </div>
+                                <button onclick="refreshSuggestion()" aria-label="Shuffle suggestion" title="Get another similar suggestion" class="text-[11px] text-slate-400 hover:text-white px-2 py-0.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-colors flex items-center space-x-1.5 shrink-0 ml-1">
+                                    <i class="fa-solid fa-arrows-rotate text-[10px]"></i>
+                                    <span class="hidden sm:inline">Shuffle</span>
+                                </button>
+                            </div>
+                            <div class="group relative flex items-center justify-between p-2.5 sm:p-3 rounded-xl border border-dashed border-red-500/30 bg-gradient-to-r from-red-950/20 via-slate-900/60 to-slate-900/40 hover:border-red-500/50 transition-all">
+                                <div class="flex items-center space-x-3 min-w-0 flex-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-red-500 rounded-lg p-1 -m-1"
+                                     role="button" tabindex="0"
+                                     aria-label="Add suggested video ${safeSugTitle} to queue"
+                                     onclick="addCurrentSuggestion()"
+                                     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();addCurrentSuggestion();}">
+                                    <div class="relative w-14 h-9 sm:w-16 sm:h-10 bg-slate-800 rounded-lg overflow-hidden shrink-0 border border-slate-700/50 flex items-center justify-center">
+                                        <img src="https://img.youtube.com/vi/${safeSugId}/hqdefault.jpg" onerror="this.src='https://placehold.co/120x90/1e293b/64748b?text=YT'" class="w-full h-full object-cover" alt="Thumbnail">
+                                        <div class="absolute inset-0 bg-slate-950/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <i class="fa-solid fa-plus text-white text-xs"></i>
+                                        </div>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="text-xs font-semibold truncate text-slate-200 group-hover:text-red-400 transition-colors">${safeSugTitle}</div>
+                                        <div class="flex items-center space-x-2 text-[10px] text-slate-400 mt-0.5">
+                                            <span class="text-slate-400 font-medium">${safeSugGenre}</span>
+                                            <span class="text-slate-600">•</span>
+                                            <span class="text-red-400/90 font-medium">Click to queue</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="ml-2 shrink-0">
+                                    <button onclick="addCurrentSuggestion()" aria-label="Add suggested track to queue" title="Add to Queue" class="px-2.5 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-medium transition-all shadow-md shadow-red-600/20 active:scale-95 flex items-center space-x-1">
+                                        <i class="fa-solid fa-plus text-[10px]"></i>
+                                        <span class="text-xs">Add</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            } else {
+                currentSuggestion = null;
+            }
+
             container.innerHTML = html;
         }
 
