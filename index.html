@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    
+    <!-- iOS & Android PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="YT Queue">
+    <meta name="theme-color" content="#020617">
+
+    <title>YouTube Queue Player</title>
+
+    <!-- Static Manifest & Apple Touch Icons -->
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" sizes="192x192" href="./icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            height: 100dvh;
+            overscroll-behavior-y: none;
+            -webkit-tap-highlight-color: transparent;
+            -webkit-user-select: none;
+            user-select: none;
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
+        }
+        input {
+            -webkit-user-select: text;
+            user-select: text;
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 flex flex-col md:flex-row overflow-hidden">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-6 right-5 left-5 sm:left-auto z-50 flex flex-col items-end space-y-2 pointer-events-none"></div>
+
+    <!-- Hidden File Input for Queue Import -->
+    <input type="file" id="import-queue-input" accept="application/json" class="hidden" onchange="handleImportQueue(event)">
+
+    <!-- Left/Top Column: Video Player & Controls -->
+    <div class="w-full md:w-3/5 lg:w-2/3 flex flex-col shrink-0 md:h-full bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 p-3 sm:p-6 overflow-y-auto">
+        <header class="flex items-center justify-between mb-3 sm:mb-4">
+            <div class="flex items-center space-x-2.5">
+                <div class="bg-red-600 text-white p-2 rounded-xl shadow-lg shadow-red-600/30 flex items-center justify-center">
+                    <i class="fa-brands fa-youtube text-lg sm:text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-base sm:text-lg font-bold tracking-tight text-white leading-tight">YT Queue Streamer</h1>
+                    <p class="text-[11px] sm:text-xs text-slate-400">Seamless playback & shared queue</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span class="w-1.5 h-1.5 mr-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
+                    Live Player
+                </span>
+            </div>
+        </header>
+
+        <!-- Player Container -->
+        <div class="relative w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-800 group">
+            <div id="youtube-player" class="w-full h-full absolute inset-0"></div>
+            <!-- Dynamic Overlay for Autoplay / Embed Restrictions -->
+            <div id="click-to-play-overlay" onclick="retryPlayback()" class="absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center p-5 text-center cursor-pointer transition-all duration-300 opacity-0 pointer-events-none z-20"></div>
+            <!-- Empty State Overlay -->
+            <div id="player-placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-slate-400 p-6 text-center transition-opacity duration-300 z-10">
+                <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mb-3 text-slate-500 group-hover:text-red-500 transition-colors">
+                    <i class="fa-solid fa-play text-xl sm:text-2xl ml-1"></i>
+                </div>
+                <h3 class="text-sm font-semibold text-slate-200 mb-1">Queue is currently empty</h3>
+                <p class="text-xs text-slate-500 max-w-xs">Add a YouTube link below to start playback automatically.</p>
+            </div>
+        </div>
+
+        <!-- Now Playing & Controls -->
+        <div class="mt-3 sm:mt-4 bg-slate-950/60 rounded-xl p-3 sm:p-4 border border-slate-800/80">
+            <div class="flex items-center justify-between">
+                <div class="min-w-0 flex-1 pr-3">
+                    <div class="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Now Playing</div>
+                    <h2 id="current-title" class="text-xs sm:text-sm font-semibold text-white truncate mt-0.5">No video playing</h2>
+                </div>
+                <div class="flex items-center space-x-1 shrink-0 font-mono text-[11px] text-slate-400">
+                    <span id="current-time">0:00</span>
+                    <span class="text-slate-600">/</span>
+                    <span id="current-duration">--:--</span>
+                </div>
+            </div>
+
+            <!-- Interactive Scrubber / Seek Bar -->
+            <div class="mt-2.5 flex items-center space-x-2">
+                <input type="range" id="progress-bar" min="0" max="100" value="0" step="0.1"
+                    aria-label="Playback progress scrubber"
+                    onmousedown="isSeeking = true"
+                    onmouseup="finishSeek(this.value)"
+                    ontouchstart="isSeeking = true"
+                    ontouchend="finishSeek(this.value)"
+                    oninput="updateSeekDisplay(this.value)"
+                    class="w-full accent-red-600 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+            </div>
+
+            <div class="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between">
+                <div class="flex items-center space-x-2 sm:space-x-3">
+                    <button onclick="playPrevious()" aria-label="Previous track" title="Previous Video" class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition-all active:scale-95">
+                        <i class="fa-solid fa-backward-step text-xs sm:text-sm"></i>
+                    </button>
+                    <button onclick="togglePlayPause()" id="play-pause-btn" aria-label="Play or pause" title="Play / Pause" class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-red-600 hover:bg-red-500 text-white flex items-center justify-center transition-all shadow-lg shadow-red-600/30 active:scale-95">
+                        <i class="fa-solid fa-play ml-0.5 text-sm sm:text-base" id="play-pause-icon"></i>
+                    </button>
+                    <button onclick="playNext()" aria-label="Next track" title="Skip to Next" class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center transition-all active:scale-95">
+                        <i class="fa-solid fa-forward-step text-xs sm:text-sm"></i>
+                    </button>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                    <div class="hidden sm:flex items-center space-x-2 mr-2">
+                        <button onclick="toggleMute()" id="mute-btn" aria-label="Mute or unmute volume" class="text-slate-400 hover:text-white transition-colors p-1"><i class="fa-solid fa-volume-high text-xs"></i></button>
+                        <input type="range" id="volume-slider" min="0" max="100" value="100" aria-label="Volume slider" oninput="setVolume(this.value)" class="w-20 accent-red-600 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+                    </div>
+                    <button onclick="toggleLoop()" id="loop-btn" aria-label="Toggle loop queue" title="Toggle Loop Queue" class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-all active:scale-95">
+                        <i class="fa-solid fa-rotate-right text-xs sm:text-sm"></i>
+                    </button>
+                    <button onclick="clearQueueCompletely()" aria-label="Clear entire queue" title="Clear Entire Queue" class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center transition-all active:scale-95">
+                        <i class="fa-solid fa-trash-can text-xs sm:text-sm"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right/Bottom Column: Queue Management -->
+    <div class="w-full md:w-2/5 lg:w-1/3 flex flex-col flex-1 min-h-0 md:h-full bg-slate-950 p-3 sm:p-6 overflow-hidden">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm sm:text-base font-bold text-white flex items-center space-x-2">
+                <i class="fa-solid fa-list-ul text-red-500"></i>
+                <span>Playback Queue</span>
+            </h2>
+            <span id="queue-count" class="text-xs px-2.5 py-0.5 bg-slate-800 text-slate-300 rounded-full font-medium border border-slate-700">0 items</span>
+        </div>
+
+        <form id="add-video-form" onsubmit="addVideoToQueue(event)" class="space-y-2.5 mb-3 shrink-0">
+            <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                    <i class="fa-solid fa-link text-sm"></i>
+                </div>
+                <input type="text" id="video-url-input" placeholder="Paste YouTube link or ID..." 
+                    class="w-full pl-9 pr-20 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-base sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600 transition-all shadow-inner">
+                <button type="submit" aria-label="Add video to queue" class="absolute right-1.5 top-1.5 bottom-1.5 px-3.5 bg-red-600 hover:bg-red-500 text-white font-medium text-xs rounded-lg transition-all shadow-md shadow-red-600/20 active:scale-95 flex items-center space-x-1">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Add</span>
+                </button>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button type="button" onclick="loadSamplePlaylist()" aria-label="Load demo queue" class="flex-1 py-2 px-3 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-medium border border-slate-800 transition-all flex items-center justify-center space-x-1.5 active:scale-95">
+                    <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
+                    <span>Demo Queue</span>
+                </button>
+                <button type="button" onclick="document.getElementById('import-queue-input').click()" aria-label="Import queue from JSON" class="py-2 px-3 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-medium border border-slate-800 transition-all flex items-center justify-center" title="Import Queue JSON">
+                    <i class="fa-solid fa-upload"></i>
+                </button>
+                <button type="button" onclick="exportQueue()" aria-label="Export queue to JSON" class="py-2 px-3 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-medium border border-slate-800 transition-all flex items-center justify-center" title="Export Queue JSON">
+                    <i class="fa-solid fa-download"></i>
+                </button>
+            </div>
+        </form>
+
+        <div id="queue-container" class="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0"></div>
+    </div>
+
+    <script>
+        let player = null;
+        let queue = [];
+        let currentIndex = -1;
+        let isLooping = false;
+        let isApiReady = false;
+        let progressInterval = null;
+        let isSeeking = false;
+        let recentlyClearedQueue = null;
+
+        // Register Service Worker
+        if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(err => console.warn('SW setup failed:', err));
+            });
+        }
+
+        // Sanitize dynamic strings to prevent XSS
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function formatTime(seconds) {
+            if (!seconds || isNaN(seconds) || seconds < 0) return '0:00';
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        }
+
+        function startProgressTracking() {
+            stopProgressTracking();
+            progressInterval = setInterval(updatePlaybackProgress, 500);
+        }
+
+        function stopProgressTracking() {
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+        }
+
+        function updatePlaybackProgress() {
+            if (!player || typeof player.getCurrentTime !== 'function' || !player.getDuration) return;
+            const curTime = player.getCurrentTime() || 0;
+            const duration = player.getDuration() || 0;
+
+            const timeEl = document.getElementById('current-time');
+            const durEl = document.getElementById('current-duration');
+            const progressBar = document.getElementById('progress-bar');
+
+            if (durEl) {
+                durEl.innerText = duration > 0 ? formatTime(duration) : (duration === 0 ? '--:--' : 'Live');
+            }
+
+            if (!isSeeking && progressBar) {
+                if (timeEl) timeEl.innerText = formatTime(curTime);
+                if (duration > 0) {
+                    progressBar.value = (curTime / duration) * 100;
+                } else {
+                    progressBar.value = 0;
+                }
+            }
+        }
+
+        function updateSeekDisplay(val) {
+            if (!player || !player.getDuration) return;
+            const duration = player.getDuration() || 0;
+            const targetTime = (val / 100) * duration;
+            const timeEl = document.getElementById('current-time');
+            if (timeEl) timeEl.innerText = formatTime(targetTime);
+        }
+
+        function finishSeek(val) {
+            isSeeking = false;
+            if (!player || !player.getDuration || typeof player.seekTo !== 'function') return;
+            const duration = player.getDuration() || 0;
+            if (duration > 0) {
+                const targetTime = (val / 100) * duration;
+                player.seekTo(targetTime, true);
+            }
+        }
+
+        const samplePlaylist = [
+            { id: 'jfKfPfyJRdk', title: 'Lofi hip hop radio - beats to relax/study to', duration: 'Live' },
+            { id: 'dQw4w9WgXcQ', title: 'Rick Astley - Never Gonna Give You Up', duration: '3:33' },
+            { id: '9bZkp7q19f0', title: 'PSY - GANGNAM STYLE(강남스타일) M/V', duration: '4:13' }
+        ];
+
+        if (window.location.protocol === 'file:') {
+            setTimeout(() => {
+                showToast("⚠️ Opened via file://! Deploy to GitHub Pages or localhost so YouTube allows embeds.", "error");
+            }, 800);
+        }
+
+        // Manage overlay states cleanly
+        function showOverlay(mode, errorCode = null, videoId = null) {
+            const overlay = document.getElementById('click-to-play-overlay');
+            if (mode === 'hidden') {
+                overlay.style.opacity = '0';
+                overlay.style.pointerEvents = 'none';
+                return;
+            }
+
+            if (mode === 'tap-to-play') {
+                overlay.innerHTML = `
+                    <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-red-600 text-white flex items-center justify-center mb-3 shadow-lg shadow-red-600/40 hover:scale-105 transition-transform">
+                        <i class="fa-solid fa-play text-xl sm:text-2xl ml-1"></i>
+                    </div>
+                    <h3 class="text-sm font-semibold text-white mb-1">Tap to Start Playback</h3>
+                    <p class="text-xs text-slate-400 max-w-xs">iOS and browsers require a direct tap to start audio/video playback.</p>
+                `;
+            } else if (mode === 'error') {
+                const isLocalFile = window.location.protocol === 'file:';
+                const reason = isLocalFile 
+                    ? "You are opening this file via file://. Host on GitHub Pages or localhost to play music videos."
+                    : "The video owner has disabled playback on external websites.";
+                const safeId = videoId ? escapeHtml(videoId) : '';
+
+                overlay.innerHTML = `
+                    <div class="w-14 h-14 rounded-full bg-rose-600/20 border border-rose-500/40 text-rose-400 flex items-center justify-center mb-2.5 shadow-lg">
+                        <i class="fa-solid fa-ban text-xl"></i>
+                    </div>
+                    <h3 class="text-sm font-semibold text-white mb-1">Embed Restricted (Error ${escapeHtml(errorCode)})</h3>
+                    <p class="text-xs text-slate-400 max-w-xs mb-3">${reason}</p>
+                    <div class="flex items-center space-x-2.5">
+                        ${safeId ? `
+                            <a href="https://www.youtube.com/watch?v=${safeId}" target="_blank" rel="noopener" 
+                                onclick="event.stopPropagation()"
+                                class="px-3.5 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-medium rounded-xl transition-all flex items-center space-x-1.5 shadow-lg">
+                                <i class="fa-brands fa-youtube"></i>
+                                <span>Open in YouTube</span>
+                            </a>
+                        ` : ''}
+                        <button onclick="event.stopPropagation(); playNext();" 
+                                class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl border border-slate-700 transition-all">
+                            Skip <i class="fa-solid fa-forward-step ml-1"></i>
+                        </button>
+                    </div>
+                `;
+            }
+
+            overlay.classList.remove('opacity-0', 'pointer-events-none');
+            overlay.style.opacity = '1';
+            overlay.style.pointerEvents = 'auto';
+        }
+
+        // Load YouTube IFrame API
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+        function onYouTubeIframeAPIReady() {
+            const isHttp = window.location.protocol.startsWith('http');
+            const playerVars = {
+                'autoplay': 1,
+                'controls': 1,
+                'playsinline': 1,
+                'modestbranding': 1,
+                'rel': 0,
+                'enablejsapi': 1,
+                'iv_load_policy': 3
+            };
+
+            if (isHttp && window.location.origin && window.location.origin !== 'null') {
+                playerVars.origin = window.location.origin;
+                playerVars.widget_referrer = window.location.href;
+            }
+
+            player = new YT.Player('youtube-player', {
+                height: '100%',
+                width: '100%',
+                host: 'https://www.youtube.com',
+                playerVars: playerVars,
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange,
+                    'onError': onPlayerError
+                }
+            });
+        }
+
+        function onPlayerReady() {
+            isApiReady = true;
+            renderQueue();
+            loadSavedQueue();
+        }
+
+        function onPlayerStateChange(event) {
+            const playPauseIcon = document.getElementById('play-pause-icon');
+            if (event.data === YT.PlayerState.PLAYING) {
+                playPauseIcon.className = "fa-solid fa-pause text-sm sm:text-base";
+                showOverlay('hidden');
+                startProgressTracking();
+                updateCurrentVideoMetadata();
+                if ('mediaSession' in navigator && queue[currentIndex]) {
+                    navigator.mediaSession.metadata = new MediaMetadata({
+                        title: queue[currentIndex].title,
+                        artist: 'YT Queue Streamer',
+                        artwork: [{ src: `https://img.youtube.com/vi/${queue[currentIndex].id}/hqdefault.jpg`, sizes: '480x360', type: 'image/jpeg' }]
+                    });
+                    navigator.mediaSession.setActionHandler('previoustrack', playPrevious);
+                    navigator.mediaSession.setActionHandler('nexttrack', playNext);
+                }
+            } else if (event.data === YT.PlayerState.PAUSED) {
+                playPauseIcon.className = "fa-solid fa-play ml-0.5 text-sm sm:text-base";
+                stopProgressTracking();
+            } else if (event.data === YT.PlayerState.ENDED) {
+                stopProgressTracking();
+                handleVideoEnded();
+            }
+        }
+
+        function onPlayerError(event) {
+            console.warn("YouTube Player Error code:", event.data);
+            const currentVideo = queue[currentIndex];
+            stopProgressTracking();
+            if (event.data === 150 || event.data === 101 || event.data === 153) {
+                showToast("Video restricted by owner.", "error");
+                showOverlay('error', event.data, currentVideo ? currentVideo.id : null);
+            } else {
+                showToast(`Playback error (${event.data})`, "error");
+                if (queue.length > 1 && (currentIndex + 1 < queue.length || isLooping)) {
+                    setTimeout(() => playNext(), 1500);
+                } else {
+                    showOverlay('error', event.data, currentVideo ? currentVideo.id : null);
+                }
+            }
+        }
+
+        function retryPlayback() {
+            showOverlay('hidden');
+            if (currentIndex >= 0 && queue[currentIndex]) {
+                playQueueIndex(currentIndex);
+            } else if (queue.length > 0) {
+                playQueueIndex(0);
+            }
+        }
+
+        function extractVideoId(urlOrId) {
+            if (!urlOrId) return null;
+            urlOrId = urlOrId.trim();
+            if (/^[a-zA-Z0-9_-]{11}$/.test(urlOrId)) return urlOrId;
+            const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|shorts\/|live\/|watch\?v=|&v=)([^#&?]*).*/;
+            const match = urlOrId.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        async function fetchVideoTitle(videoId) {
+            try {
+                const response = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.title) return data.title;
+                }
+            } catch (e) {
+                console.warn("YouTube oEmbed fetch failed, trying fallback...", e);
+            }
+            try {
+                const response = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.title) return data.title;
+                }
+            } catch (e) {
+                console.warn("Could not fetch oEmbed title fallback.", e);
+            }
+            return `YouTube Video (${videoId})`;
+        }
+
+        async function addVideoToQueue(event) {
+            event.preventDefault();
+            const input = document.getElementById('video-url-input');
+            const videoId = extractVideoId(input.value);
+
+            if (!videoId) {
+                showToast("Please enter a valid YouTube link or ID", "error");
+                return;
+            }
+
+            if (queue.some(item => item.id === videoId)) {
+                showToast("Video is already in the queue", "info");
+                input.value = '';
+                return;
+            }
+
+            input.value = '';
+            input.blur();
+            showToast("Fetching video details...", "info");
+
+            const title = await fetchVideoTitle(videoId);
+            queue.push({ id: videoId, title: title, addedAt: Date.now() });
+            saveQueueToStorage();
+            renderQueue();
+
+            if (currentIndex === -1 && queue.length === 1) {
+                playQueueIndex(0);
+            } else {
+                showToast("Added to queue!", "success");
+            }
+        }
+
+        function handleQueueKeydown(event, index) {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                playQueueIndex(index);
+            }
+        }
+
+        function renderQueue() {
+            const container = document.getElementById('queue-container');
+            const countBadge = document.getElementById('queue-count');
+            countBadge.innerText = `${queue.length} item${queue.length === 1 ? '' : 's'}`;
+
+            if (queue.length === 0) {
+                container.innerHTML = `
+                    <div id="queue-empty-state" class="h-full flex flex-col items-center justify-center text-center text-slate-500 p-4">
+                        <i class="fa-solid fa-layer-group text-2xl sm:text-3xl mb-2 opacity-40"></i>
+                        <p class="text-xs font-medium">Your queue is empty</p>
+                        <p class="text-[11px] text-slate-600 mt-0.5">Paste a YouTube URL above to add videos.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            queue.forEach((item, index) => {
+                const isPlaying = index === currentIndex;
+                const activeClass = isPlaying ? 'bg-red-600/10 border-red-500/40 text-white shadow-md' : 'bg-slate-900/80 border-slate-800/80 text-slate-300 hover:bg-slate-900';
+                const safeTitle = escapeHtml(item.title);
+                const safeId = escapeHtml(item.id);
+
+                html += `
+                    <div class="group relative flex items-center justify-between p-2.5 sm:p-3 rounded-xl border ${activeClass} transition-all">
+                        <div class="flex items-center space-x-3 min-w-0 flex-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-red-500 rounded-lg p-1 -m-1" 
+                             role="button" tabindex="0" 
+                             aria-label="Play ${safeTitle}" 
+                             onclick="playQueueIndex(${index})" 
+                             onkeydown="handleQueueKeydown(event, ${index})">
+                            <div class="relative w-14 h-9 sm:w-16 sm:h-10 bg-slate-800 rounded-lg overflow-hidden shrink-0 border border-slate-700/50 flex items-center justify-center">
+                                <img src="https://img.youtube.com/vi/${safeId}/hqdefault.jpg" onerror="this.src='https://placehold.co/120x90/1e293b/64748b?text=YT'" class="w-full h-full object-cover" alt="Thumbnail">
+                                ${isPlaying ? '<div class="absolute inset-0 bg-red-600/40 flex items-center justify-center"><i class="fa-solid fa-volume-high text-white text-xs animate-pulse"></i></div>' : ''}
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="text-xs font-semibold truncate ${isPlaying ? 'text-red-400' : 'text-slate-200'}">${safeTitle}</div>
+                                <div class="text-[10px] text-slate-500">ID: ${safeId}</div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-0.5 ml-2 shrink-0">
+                            ${index > 0 ? `<button onclick="moveQueueItem(event, ${index}, ${index - 1})" aria-label="Move track up" class="p-1.5 text-slate-500 hover:text-slate-300 rounded transition-colors" title="Move Up"><i class="fa-solid fa-chevron-up text-xs"></i></button>` : ''}
+                            ${index < queue.length - 1 ? `<button onclick="moveQueueItem(event, ${index}, ${index + 1})" aria-label="Move track down" class="p-1.5 text-slate-500 hover:text-slate-300 rounded transition-colors" title="Move Down"><i class="fa-solid fa-chevron-down text-xs"></i></button>` : ''}
+                            <button onclick="removeFromQueue(event, ${index})" aria-label="Remove track from queue" class="p-1.5 text-slate-500 hover:text-rose-400 rounded transition-colors" title="Remove"><i class="fa-solid fa-xmark text-sm"></i></button>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        }
+
+        function playQueueIndex(index) {
+            if (index < 0 || index >= queue.length) return;
+            currentIndex = index;
+            const video = queue[currentIndex];
+            showOverlay('hidden');
+
+            if (isApiReady && player && typeof player.loadVideoById === 'function') {
+                try {
+                    player.loadVideoById({ 'videoId': video.id, 'suggestedQuality': 'large' });
+                } catch (e) {
+                    player.cueVideoById(video.id);
+                }
+            }
+            saveQueueToStorage();
+            renderQueue();
+            updateCurrentVideoMetadata();
+        }
+
+        function handleVideoEnded() {
+            if (currentIndex + 1 < queue.length) {
+                playQueueIndex(currentIndex + 1);
+            } else if (isLooping && queue.length > 0) {
+                playQueueIndex(0);
+            } else {
+                document.getElementById('current-title').innerText = "Queue finished";
+                document.getElementById('current-duration').innerText = "--:--";
+                const timeEl = document.getElementById('current-time');
+                if (timeEl) timeEl.innerText = "0:00";
+                const progressBar = document.getElementById('progress-bar');
+                if (progressBar) progressBar.value = 0;
+                document.getElementById('player-placeholder').style.opacity = '1';
+            }
+        }
+
+        function playNext() {
+            if (queue.length === 0) return;
+            let nextIdx = currentIndex + 1;
+            if (nextIdx >= queue.length) {
+                if (isLooping) nextIdx = 0;
+                else {
+                    showToast("Reached end of queue", "info");
+                    return;
+                }
+            }
+            playQueueIndex(nextIdx);
+        }
+
+        function playPrevious() {
+            if (queue.length === 0) return;
+            let prevIdx = Math.max(0, currentIndex - 1);
+            playQueueIndex(prevIdx);
+        }
+
+        function togglePlayPause() {
+            if (!isApiReady || !player) return;
+            try {
+                const state = player.getPlayerState();
+                if (state === YT.PlayerState.PLAYING) {
+                    player.pauseVideo();
+                } else {
+                    if (currentIndex === -1 && queue.length > 0) {
+                        playQueueIndex(0);
+                    } else {
+                        player.playVideo();
+                    }
+                }
+            } catch (e) {
+                retryPlayback();
+            }
+        }
+
+        function toggleLoop() {
+            isLooping = !isLooping;
+            const btn = document.getElementById('loop-btn');
+            if (isLooping) {
+                btn.className = "w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-red-600/20 text-red-400 border border-red-500/30 flex items-center justify-center transition-all active:scale-95";
+                showToast("Queue looping enabled", "success");
+            } else {
+                btn.className = "w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-all active:scale-95";
+                showToast("Queue looping disabled", "info");
+            }
+        }
+
+        function setVolume(val) {
+            if (isApiReady && player && player.setVolume) player.setVolume(val);
+        }
+
+        function toggleMute() {
+            if (!isApiReady || !player) return;
+            const muteBtn = document.getElementById('mute-btn');
+            if (player.isMuted()) {
+                player.unMute();
+                muteBtn.innerHTML = '<i class="fa-solid fa-volume-high text-xs"></i>';
+            } else {
+                player.mute();
+                muteBtn.innerHTML = '<i class="fa-solid fa-volume-xmark text-red-500 text-xs"></i>';
+            }
+        }
+
+        function removeFromQueue(e, index) {
+            e.stopPropagation();
+            queue.splice(index, 1);
+            if (index === currentIndex) {
+                if (queue.length > 0) {
+                    currentIndex = Math.min(index, queue.length - 1);
+                    playQueueIndex(currentIndex);
+                } else {
+                    currentIndex = -1;
+                    stopProgressTracking();
+                    if (player && player.stopVideo) player.stopVideo();
+                    document.getElementById('current-title').innerText = "No video playing";
+                    document.getElementById('current-duration').innerText = "--:--";
+                    const timeEl = document.getElementById('current-time');
+                    if (timeEl) timeEl.innerText = "0:00";
+                    const progressBar = document.getElementById('progress-bar');
+                    if (progressBar) progressBar.value = 0;
+                    document.getElementById('player-placeholder').style.opacity = '1';
+                    saveQueueToStorage();
+                    renderQueue();
+                }
+            } else {
+                if (index < currentIndex) {
+                    currentIndex--;
+                }
+                saveQueueToStorage();
+                renderQueue();
+            }
+            showToast("Removed from queue", "info");
+        }
+
+        function moveQueueItem(e, fromIndex, toIndex) {
+            e.stopPropagation();
+            if (toIndex < 0 || toIndex >= queue.length) return;
+            const item = queue.splice(fromIndex, 1)[0];
+            queue.splice(toIndex, 0, item);
+            if (currentIndex === fromIndex) currentIndex = toIndex;
+            else if (fromIndex < currentIndex && toIndex >= currentIndex) currentIndex--;
+            else if (fromIndex > currentIndex && toIndex <= currentIndex) currentIndex++;
+            saveQueueToStorage();
+            renderQueue();
+        }
+
+        function clearQueueCompletely() {
+            if (queue.length === 0) return;
+            if (!confirm(`Are you sure you want to clear all ${queue.length} video(s) from the queue?`)) {
+                return;
+            }
+            recentlyClearedQueue = [...queue];
+            queue = [];
+            currentIndex = -1;
+            stopProgressTracking();
+            if (player && player.stopVideo) player.stopVideo();
+            document.getElementById('current-title').innerText = "No video playing";
+            document.getElementById('current-duration').innerText = "--:--";
+            const timeEl = document.getElementById('current-time');
+            if (timeEl) timeEl.innerText = "0:00";
+            const progressBar = document.getElementById('progress-bar');
+            if (progressBar) progressBar.value = 0;
+            document.getElementById('player-placeholder').style.opacity = '1';
+            showOverlay('hidden');
+            saveQueueToStorage();
+            renderQueue();
+            showToast("Queue cleared.", "info", undoClearQueue, "Undo");
+        }
+
+        function undoClearQueue() {
+            if (recentlyClearedQueue && recentlyClearedQueue.length > 0) {
+                queue = [...recentlyClearedQueue];
+                recentlyClearedQueue = null;
+                currentIndex = 0;
+                saveQueueToStorage();
+                renderQueue();
+                playQueueIndex(0);
+                showToast("Queue restored!", "success");
+            }
+        }
+
+        function loadSamplePlaylist() {
+            let added = 0;
+            for (const item of samplePlaylist) {
+                if (!queue.some(q => q.id === item.id)) {
+                    queue.push({ ...item, addedAt: Date.now() });
+                    added++;
+                }
+            }
+            saveQueueToStorage();
+            renderQueue();
+            if (currentIndex === -1 && queue.length > 0) {
+                playQueueIndex(0);
+            } else {
+                showToast(added > 0 ? `Added ${added} demo tracks!` : "Demo tracks already in queue", "success");
+            }
+        }
+
+        function updateCurrentVideoMetadata() {
+            const placeholder = document.getElementById('player-placeholder');
+            if (currentIndex >= 0 && queue[currentIndex]) {
+                placeholder.style.opacity = '0';
+                document.getElementById('current-title').innerText = queue[currentIndex].title;
+                updatePlaybackProgress();
+            } else {
+                placeholder.style.opacity = '1';
+                document.getElementById('current-title').innerText = "No video playing";
+                document.getElementById('current-duration').innerText = "--:--";
+                const timeEl = document.getElementById('current-time');
+                if (timeEl) timeEl.innerText = "0:00";
+                const progressBar = document.getElementById('progress-bar');
+                if (progressBar) progressBar.value = 0;
+            }
+        }
+
+        function saveQueueToStorage() {
+            try {
+                localStorage.setItem('yt_queue_data', JSON.stringify({ queue, currentIndex }));
+            } catch (e) {
+                console.warn("Could not save to localStorage", e);
+            }
+        }
+
+        function loadSavedQueue() {
+            try {
+                const saved = localStorage.getItem('yt_queue_data');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && Array.isArray(parsed.queue) && parsed.queue.length > 0) {
+                        queue = parsed.queue;
+                        currentIndex = (parsed.currentIndex >= 0 && parsed.currentIndex < queue.length) ? parsed.currentIndex : 0;
+                        renderQueue();
+                        if (isApiReady && player && player.cueVideoById && queue[currentIndex]) {
+                            player.cueVideoById(queue[currentIndex].id);
+                            updateCurrentVideoMetadata();
+                            showOverlay('tap-to-play');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn("Could not load from localStorage", e);
+            }
+        }
+
+        function exportQueue() {
+            if (queue.length === 0) {
+                showToast("Queue is empty", "info");
+                return;
+            }
+            const blob = new Blob([JSON.stringify(queue, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.href = url;
+            downloadAnchor.download = `youtube_queue_${Date.now()}.json`;
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            showToast("Queue exported", "success");
+        }
+
+        function handleImportQueue(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (Array.isArray(imported)) {
+                        const validItems = imported.filter(item => item && extractVideoId(item.id));
+                        if (validItems.length > 0) {
+                            queue = validItems.map(item => ({
+                                id: extractVideoId(item.id),
+                                title: String(item.title || `YouTube Video (${item.id})`),
+                                addedAt: Date.now()
+                            }));
+                            currentIndex = 0;
+                            saveQueueToStorage();
+                            renderQueue();
+                            playQueueIndex(0);
+                            showToast(`Imported ${validItems.length} videos!`, "success");
+                        } else {
+                            showToast("No valid videos found in JSON", "error");
+                        }
+                    }
+                } catch (err) {
+                    showToast("Invalid JSON file", "error");
+                }
+                event.target.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        function showToast(message, type = 'info', actionCallback = null, actionText = 'Undo') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            let bgClass = 'bg-slate-900/95 border-slate-800 text-slate-200';
+            let icon = 'fa-circle-info text-blue-400';
+            if (type === 'success') {
+                bgClass = 'bg-emerald-950/95 border-emerald-800/80 text-emerald-200';
+                icon = 'fa-circle-check text-emerald-400';
+            } else if (type === 'error') {
+                bgClass = 'bg-rose-950/95 border-rose-800/80 text-rose-200';
+                icon = 'fa-triangle-exclamation text-rose-400';
+            }
+            toast.className = `flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl border shadow-xl backdrop-blur-md ${bgClass} text-xs font-medium pointer-events-auto transition-all duration-300 translate-y-2 opacity-0`;
+            
+            let actionHtml = '';
+            if (actionCallback) {
+                actionHtml = `<button type="button" class="ml-2 font-bold underline text-amber-400 hover:text-amber-300 transition-colors" id="toast-action-btn">${escapeHtml(actionText)}</button>`;
+            }
+
+            toast.innerHTML = `<i class="fa-solid ${icon} text-sm shrink-0"></i><span>${escapeHtml(message)}</span>${actionHtml}`;
+            container.appendChild(toast);
+
+            if (actionCallback) {
+                const btn = toast.querySelector('#toast-action-btn');
+                if (btn) {
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        actionCallback();
+                        toast.remove();
+                    };
+                }
+            }
+
+            setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
+            setTimeout(() => {
+                toast.classList.add('translate-y-2', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, actionCallback ? 6000 : 3500);
+        }
+    </script>
+</body>
+</html>
