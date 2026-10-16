@@ -1,4 +1,4 @@
-const CACHE_NAME = 'yt-queue-pwa-v19';
+const CACHE_NAME = 'yt-queue-pwa-v1.9.0';
 const APP_SHELL = [
   './',
   './index.html',
@@ -21,6 +21,12 @@ self.addEventListener('activate', (event) => {
     )
   );
   self.clients.claim();
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Stale-While-Revalidate strategy for same-origin app shell requests
