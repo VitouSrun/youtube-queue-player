@@ -28,8 +28,7 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            height: 100dvh;
-            overscroll-behavior-y: none;
+            min-height: 100dvh;
             -webkit-tap-highlight-color: transparent;
             -webkit-user-select: none;
             user-select: none;
@@ -56,16 +55,16 @@
         }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 flex flex-col md:flex-row overflow-hidden">
+<body class="bg-slate-950 text-slate-100 flex flex-col md:flex-row min-h-screen md:h-screen overflow-y-auto md:overflow-hidden">
 
     <!-- Toast Notification Container -->
-    <div id="toast-container" class="fixed bottom-6 right-5 left-5 sm:left-auto z-50 flex flex-col items-end space-y-2 pointer-events-none"></div>
+    <div id="toast-container" class="fixed bottom-20 md:bottom-6 right-5 left-5 sm:left-auto z-50 flex flex-col items-end space-y-2 pointer-events-none"></div>
 
     <!-- Hidden File Input for Queue Import -->
     <input type="file" id="import-queue-input" accept="application/json" class="hidden" onchange="handleImportQueue(event)">
 
     <!-- Left/Top Column: Video Player & Controls -->
-    <div class="w-full md:w-3/5 lg:w-2/3 flex flex-col shrink-0 md:h-full bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 p-3 sm:p-6 overflow-y-auto">
+    <div id="player-section" class="w-full md:w-3/5 lg:w-2/3 flex flex-col shrink-0 md:h-full bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 p-3 sm:p-6 md:overflow-y-auto">
         <header class="flex items-center justify-between mb-3 sm:mb-4">
             <div class="flex items-center space-x-2.5">
                 <div class="bg-red-600 text-white p-2 rounded-xl shadow-lg shadow-red-600/30 flex items-center justify-center">
@@ -77,7 +76,11 @@
                 </div>
             </div>
             <div class="flex items-center space-x-2">
-                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <button type="button" onclick="scrollToQueue()" class="md:hidden inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors active:scale-95" title="Jump to Queue">
+                    <i class="fa-solid fa-list-ul text-red-500"></i>
+                    <span id="mobile-header-queue-count">0 items</span>
+                </button>
+                <span class="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                     <span class="w-1.5 h-1.5 mr-1.5 bg-emerald-400 rounded-full animate-pulse"></span>
                     Live Player
                 </span>
@@ -155,13 +158,15 @@
     </div>
 
     <!-- Right/Bottom Column: Queue Management -->
-    <div class="w-full md:w-2/5 lg:w-1/3 flex flex-col flex-1 min-h-0 md:h-full bg-slate-950 p-3 sm:p-6 overflow-hidden">
+    <div id="queue-section" class="w-full md:w-2/5 lg:w-1/3 flex flex-col md:flex-1 md:min-h-0 md:h-full bg-slate-950 p-3 sm:p-6 pb-24 md:pb-6 overflow-visible md:overflow-hidden">
         <div class="flex items-center justify-between mb-3">
             <h2 class="text-sm sm:text-base font-bold text-white flex items-center space-x-2">
                 <i class="fa-solid fa-list-ul text-red-500"></i>
                 <span>Playback Queue</span>
             </h2>
-            <span id="queue-count" class="text-xs px-2.5 py-0.5 bg-slate-800 text-slate-300 rounded-full font-medium border border-slate-700">0 items</span>
+            <div class="flex items-center space-x-2">
+                <span id="queue-count" class="text-xs px-2.5 py-0.5 bg-slate-800 text-slate-300 rounded-full font-medium border border-slate-700">0 items</span>
+            </div>
         </div>
 
         <form id="add-video-form" onsubmit="addVideoToQueue(event)" class="space-y-2.5 mb-3 shrink-0">
@@ -181,16 +186,50 @@
                     <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
                     <span>Demo Queue</span>
                 </button>
-                <button type="button" onclick="document.getElementById('import-queue-input').click()" aria-label="Import queue from JSON" class="py-2 px-3 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-medium border border-slate-800 transition-all flex items-center justify-center" title="Import Queue JSON">
+                <button type="button" onclick="clearQueueCompletely()" id="toolbar-clear-all-btn" aria-label="Clear all queue items" class="py-2 px-3 bg-slate-900 hover:bg-rose-950/50 text-slate-300 hover:text-rose-400 rounded-xl text-xs font-medium border border-slate-800 hover:border-rose-500/40 transition-all flex items-center justify-center space-x-1.5 active:scale-95" title="Clear All Queue Items">
+                    <i class="fa-solid fa-trash-can text-rose-400"></i>
+                    <span>Clear All</span>
+                </button>
+                <button type="button" onclick="document.getElementById('import-queue-input').click()" aria-label="Import queue from JSON" class="py-2 px-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-medium border border-slate-800 transition-all flex items-center justify-center" title="Import Queue JSON">
                     <i class="fa-solid fa-upload"></i>
                 </button>
-                <button type="button" onclick="exportQueue()" aria-label="Export queue to JSON" class="py-2 px-3 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-medium border border-slate-800 transition-all flex items-center justify-center" title="Export Queue JSON">
+                <button type="button" onclick="exportQueue()" aria-label="Export queue to JSON" class="py-2 px-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 rounded-xl text-xs font-medium border border-slate-800 transition-all flex items-center justify-center" title="Export Queue JSON">
                     <i class="fa-solid fa-download"></i>
                 </button>
             </div>
         </form>
 
-        <div id="queue-container" class="flex-1 overflow-y-auto space-y-2 pr-1 min-h-0"></div>
+        <div id="queue-container" class="space-y-2 pr-1 md:flex-1 md:overflow-y-auto md:min-h-0"></div>
+    </div>
+
+    <!-- Mobile Floating Mini-Player Bar -->
+    <div id="mobile-mini-player" class="fixed bottom-3 inset-x-3 sm:inset-x-6 z-40 md:hidden bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-2xl p-2.5 shadow-2xl flex items-center justify-between transition-all duration-300 translate-y-28 opacity-0 pointer-events-none">
+        <div class="flex items-center space-x-2.5 min-w-0 flex-1 cursor-pointer" onclick="scrollToPlayer()">
+            <div class="relative w-11 h-8 rounded-lg overflow-hidden shrink-0 bg-slate-800 border border-slate-700 flex items-center justify-center">
+                <img id="mini-thumbnail" src="https://placehold.co/120x90/1e293b/64748b?text=YT" onerror="this.src='https://placehold.co/120x90/1e293b/64748b?text=YT'" class="w-full h-full object-cover" alt="Now Playing">
+                <div id="mini-wave" class="absolute inset-0 bg-red-600/30 flex items-center justify-center opacity-0 transition-opacity">
+                    <i class="fa-solid fa-volume-high text-white text-[10px] animate-pulse"></i>
+                </div>
+            </div>
+            <div class="min-w-0 flex-1">
+                <div id="mini-title" class="text-xs font-semibold text-white truncate">No video playing</div>
+                <div class="text-[10px] text-slate-400 flex items-center space-x-1">
+                    <span id="mini-time">0:00</span>
+                    <span class="text-slate-600">/</span>
+                    <span id="mini-duration">--:--</span>
+                    <span class="text-slate-600">•</span>
+                    <span class="text-red-400 font-medium">View player</span>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center space-x-1.5 shrink-0 ml-2">
+            <button onclick="togglePlayPause()" aria-label="Play or pause" class="w-9 h-9 rounded-xl bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-md shadow-red-600/30 active:scale-95">
+                <i class="fa-solid fa-play text-xs ml-0.5" id="mini-play-icon"></i>
+            </button>
+            <button onclick="playNext()" aria-label="Skip to Next" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center justify-center border border-slate-700 active:scale-95">
+                <i class="fa-solid fa-forward-step text-xs"></i>
+            </button>
+        </div>
     </div>
 
     <script>
@@ -202,7 +241,12 @@
         let progressInterval = null;
         let isSeeking = false;
         let recentlyClearedQueue = null;
-        let currentSuggestion = null;
+        let currentSuggestions = [];
+        let isAutoplayEnabled = true;
+        try {
+            const savedAuto = localStorage.getItem('yt_autoplay_enabled');
+            if (savedAuto !== null) isAutoplayEnabled = JSON.parse(savedAuto);
+        } catch (e) {}
 
         // Register Service Worker
         if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
@@ -223,8 +267,13 @@
 
         function formatTime(seconds) {
             if (!seconds || isNaN(seconds) || seconds < 0) return '0:00';
-            const mins = Math.floor(seconds / 60);
-            const secs = Math.floor(seconds % 60);
+            const totalSecs = Math.floor(seconds);
+            const hrs = Math.floor(totalSecs / 3600);
+            const mins = Math.floor((totalSecs % 3600) / 60);
+            const secs = totalSecs % 60;
+            if (hrs > 0) {
+                return `${hrs}:${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+            }
             return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
         }
 
@@ -248,13 +297,27 @@
             const timeEl = document.getElementById('current-time');
             const durEl = document.getElementById('current-duration');
             const progressBar = document.getElementById('progress-bar');
+            const miniTimeEl = document.getElementById('mini-time');
+            const miniDurEl = document.getElementById('mini-duration');
 
-            if (durEl) {
-                durEl.innerText = duration > 0 ? formatTime(duration) : (duration === 0 ? '--:--' : 'Live');
+            const formattedCur = formatTime(curTime);
+            const formattedDur = duration > 0 ? formatTime(duration) : (duration === 0 ? '--:--' : 'Live');
+
+            if (durEl) durEl.innerText = formattedDur;
+            if (miniDurEl) miniDurEl.innerText = formattedDur;
+
+            if (duration > 0 && queue[currentIndex]) {
+                const curItem = queue[currentIndex];
+                if (!curItem.duration || curItem.duration === '--:--') {
+                    curItem.duration = formattedDur;
+                    saveQueueToStorage();
+                    renderQueue();
+                }
             }
 
             if (!isSeeking && progressBar) {
-                if (timeEl) timeEl.innerText = formatTime(curTime);
+                if (timeEl) timeEl.innerText = formattedCur;
+                if (miniTimeEl) miniTimeEl.innerText = formattedCur;
                 if (duration > 0) {
                     progressBar.value = (curTime / duration) * 100;
                 } else {
@@ -282,47 +345,12 @@
         }
 
         const samplePlaylist = [
-            { id: 'jfKfPfyJRdk', title: 'Lofi hip hop radio - beats to relax/study to', duration: 'Live' },
-            { id: 'dQw4w9WgXcQ', title: 'Rick Astley - Never Gonna Give You Up', duration: '3:33' },
-            { id: '9bZkp7q19f0', title: 'PSY - GANGNAM STYLE(강남스타일) M/V', duration: '4:13' }
+            { id: 'jfKfPfyJRdk', title: 'Lofi hip hop radio - beats to relax/study to', author: 'Lofi Girl', duration: 'Live' },
+            { id: 'dQw4w9WgXcQ', title: 'Rick Astley - Never Gonna Give You Up', author: 'Rick Astley', duration: '3:33' },
+            { id: '9bZkp7q19f0', title: 'PSY - GANGNAM STYLE(강남스타일) M/V', author: 'officialpsy', duration: '4:13' }
         ];
 
-        // Curated suggestions catalog with artist and keyword metadata for smart matching
-        const suggestionCatalog = [
-            // Lofi & Chill
-            { id: 'jfKfPfyJRdk', title: 'Lofi hip hop radio - beats to relax/study to', artist: 'Lofi Girl', genre: 'Lofi & Chill', keywords: ['lofi', 'chill', 'study', 'relax', 'beats', 'sleep'] },
-            { id: '5qap5aO4i9A', title: 'lofi hip hop radio - beats to sleep/chill to', artist: 'Lofi Girl', genre: 'Lofi & Chill', keywords: ['lofi', 'chill', 'sleep', 'relax', 'night', 'beats'] },
-            { id: 'L_LUpnjgPso', title: 'Chillhop Radio - jazzy & lofi hip hop beats', artist: 'Chillhop Music', genre: 'Lofi & Chill', keywords: ['chillhop', 'jazz', 'lofi', 'beats', 'instrumental'] },
-            { id: '7NOSDKb0HlU', title: 'cozy winter lofi beats - chill lofi hip hop', artist: 'ChilledCow', genre: 'Lofi & Chill', keywords: ['winter', 'cozy', 'chill', 'lofi', 'relax'] },
 
-            // Synthwave & Retro
-            { id: 'DWcJFNfaw90', title: 'Synthwave Radio - chill synth / retro beats', artist: 'Lofi Girl Synthwave', genre: 'Synthwave', keywords: ['synthwave', 'synth', 'retro', '80s', 'cyberpunk', 'outrun'] },
-            { id: '4xDzrJKXOOY', title: 'The Midnight - Sunset', artist: 'The Midnight', genre: 'Synthwave', keywords: ['the midnight', 'synthwave', 'retro', '80s', 'sunset'] },
-            { id: 'MV_3Dpw-BRY', title: 'Kavinsky - Nightcall', artist: 'Kavinsky', genre: 'Synthwave', keywords: ['kavinsky', 'nightcall', 'drive', 'synthwave', 'electro'] },
-            { id: '4XpnKHLe6s8', title: 'HOME - Resonance', artist: 'HOME', genre: 'Synthwave', keywords: ['home', 'resonance', 'chillwave', 'synthwave', 'retro'] },
-
-            // Pop & Global Hits
-            { id: 'JGwWNGJdvx8', title: 'Ed Sheeran - Shape of You', artist: 'Ed Sheeran', genre: 'Pop', keywords: ['ed sheeran', 'pop', 'dance', 'chart', 'hits'] },
-            { id: '2Vv-BfVoq4g', title: 'Ed Sheeran - Perfect', artist: 'Ed Sheeran', genre: 'Acoustic Pop', keywords: ['ed sheeran', 'perfect', 'acoustic', 'love', 'ballad'] },
-            { id: '09R8_2nJtjg', title: 'Maroon 5 - Sugar', artist: 'Maroon 5', genre: 'Pop', keywords: ['maroon 5', 'sugar', 'pop', 'hits', 'adam levine'] },
-            { id: 'hT_nvWreIhg', title: 'OneRepublic - Counting Stars', artist: 'OneRepublic', genre: 'Pop Rock', keywords: ['onerepublic', 'counting stars', 'pop', 'rock', 'hits'] },
-            { id: 'OPf0YbXqDm0', title: 'Mark Ronson - Uptown Funk ft. Bruno Mars', artist: 'Mark Ronson', genre: 'Funk & Pop', keywords: ['bruno mars', 'uptown funk', 'funk', 'pop', 'dance'] },
-            { id: 'dQw4w9WgXcQ', title: 'Rick Astley - Never Gonna Give You Up', artist: 'Rick Astley', genre: 'Pop Classic', keywords: ['rick astley', 'pop', '80s', 'dance', 'classic'] },
-            { id: 'YQHsXMglC9A', title: 'Adele - Hello', artist: 'Adele', genre: 'Pop & Soul', keywords: ['adele', 'hello', 'soul', 'pop', 'ballad'] },
-
-            // Rock & Alternative
-            { id: 'kXYiU_JCYtU', title: 'Linkin Park - Numb', artist: 'Linkin Park', genre: 'Rock', keywords: ['linkin park', 'numb', 'rock', 'alternative', 'metal', 'chester'] },
-            { id: 'eVTXPUF4Oz4', title: 'Linkin Park - In The End', artist: 'Linkin Park', genre: 'Rock', keywords: ['linkin park', 'in the end', 'rock', 'alternative', 'metal'] },
-            { id: 'fJ9rUzIMcZQ', title: 'Queen - Bohemian Rhapsody', artist: 'Queen', genre: 'Rock', keywords: ['queen', 'bohemian rhapsody', 'rock', 'classic rock', 'freddie mercury'] },
-            { id: '1w7OgIMMRc4', title: 'Guns N Roses - Sweet Child O Mine', artist: 'Guns N Roses', genre: 'Rock', keywords: ['guns n roses', 'slash', 'rock', 'classic rock', 'guitar'] },
-            { id: 'hTWKbfoikeg', title: 'Nirvana - Smells Like Teen Spirit', artist: 'Nirvana', genre: 'Grunge & Rock', keywords: ['nirvana', 'kurt cobain', 'grunge', 'rock', 'teen spirit'] },
-
-            // K-Pop & Dance
-            { id: '9bZkp7q19f0', title: 'PSY - GANGNAM STYLE (강남스타일)', artist: 'PSY', genre: 'K-Pop', keywords: ['psy', 'gangnam style', 'k-pop', 'kpop', 'dance', 'korean'] },
-
-            // Latin & Rhythm
-            { id: 'kJQP7kiw5Fk', title: 'Luis Fonsi - Despacito ft. Daddy Yankee', artist: 'Luis Fonsi', genre: 'Latin Pop', keywords: ['luis fonsi', 'despacito', 'latin', 'reggaeton', 'spanish', 'dance'] }
-        ];
 
         const genreKeywordRules = [
             { genre: 'Synthwave', keywords: ['synthwave', 'retrowave', 'synth', 'cyberpunk', 'outrun', 'vaporwave', '80s'] },
@@ -356,28 +384,56 @@
             'luis fonsi': 'Latin Pop'
         };
 
+        const noiseTokensRegex = /\b(official|music|video|audio|lyrics|lyric|remaster|remastered|hd|hq|4k|mv|m\/v|explicit|live|performance|version|visualizer|clip|officiel|oficial|sub|espanol|english|full|album|hour|hours|hr|hrs|loop|seamless|1080p|720p)\b/gi;
+
+        function normalizeTextForComparison(text) {
+            return String(text || '')
+                .toLowerCase()
+                .replace(/\[[^\]]*\]/g, ' ')
+                .replace(/\([^\)]*\)/g, ' ')
+                .replace(/\|.*$/g, ' ')
+                .replace(/\b(ft|feat|featuring)\b\.?.*$/gi, ' ')
+                .replace(noiseTokensRegex, ' ')
+                .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
         function extractTrackMetadata(title, author = '') {
-            let clean = (title || '')
+            let clean = String(title || '')
                 .replace(/\[[^\]]*\]/g, '')
-                .replace(/\([^\)]*(?:official|video|audio|lyrics|remaster|hd|4k|mv|explicit)[^\)]*\)/gi, '')
+                .replace(/\([^\)]*(?:official|video|audio|lyrics|lyric|remaster|remastered|hd|4k|mv|explicit|live|visualizer|version|\d{4})[^\)]*\)/gi, '')
+                .replace(/\b(?:m\/v|mv)\b/gi, '')
                 .replace(/\|.*$/g, '')
+                .trim();
+
+            const cleanedAuthor = String(author || '')
+                .replace(/ - Topic$/i, '')
+                .replace(/VEVO$/i, '')
+                .replace(/Official$/i, '')
                 .trim();
 
             let artist = '';
             let trackName = clean;
-            if (clean.includes(' - ')) {
-                const parts = clean.split(' - ');
-                artist = parts[0].trim();
-                trackName = parts.slice(1).join(' - ').trim();
+            const dashMatch = clean.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+            if (dashMatch) {
+                artist = dashMatch[1].trim();
+                trackName = dashMatch[2].trim();
             } else if (clean.includes(': ')) {
                 const parts = clean.split(': ');
                 artist = parts[0].trim();
                 trackName = parts.slice(1).join(': ').trim();
-            } else if (author) {
-                artist = author.replace(/ - Topic$/i, '').replace(/VEVO$/i, '').trim();
+            } else if (cleanedAuthor) {
+                artist = cleanedAuthor;
             }
 
-            const searchBlob = `${clean} ${author} ${artist}`.toLowerCase();
+            // Strip featured artists from trackName for core song comparison
+            const coreTrackRaw = trackName
+                .replace(/\b(ft|feat|featuring)\b\.?.*$/i, '')
+                .replace(/\([^\)]*\)/g, '')
+                .trim();
+
+            const searchBlob = `${clean} ${cleanedAuthor} ${artist}`.toLowerCase();
             let detectedGenre = null;
             let detectedArtist = null;
 
@@ -407,192 +463,461 @@
                 }
             }
 
+            const resolvedArtist = artist || detectedArtist || cleanedAuthor;
+            const fullNorm = normalizeTextForComparison(clean);
+            let trackCore = normalizeTextForComparison(coreTrackRaw);
+            // If artist name is embedded in trackCore, strip it so we isolate the song title
+            const artistNorm = normalizeTextForComparison(resolvedArtist);
+            if (artistNorm && trackCore.startsWith(artistNorm + ' ')) {
+                trackCore = trackCore.slice(artistNorm.length).trim();
+            } else if (artistNorm && trackCore.endsWith(' ' + artistNorm)) {
+                trackCore = trackCore.slice(0, -artistNorm.length).trim();
+            }
+
+            const trackTokens = trackCore.split(' ').filter(t => t.length > 2);
+
             return {
                 cleanTitle: clean,
-                artist: artist || detectedArtist,
-                detectedGenre: detectedGenre,
+                artist: resolvedArtist,
+                trackName: coreTrackRaw || clean,
+                trackCore: trackCore || fullNorm,
+                fullNorm,
+                artistNorm,
+                trackTokens,
+                detectedGenre,
                 searchBlob
             };
         }
 
-        // Live YouTube suggestions cache & instances
-        const liveSuggestionsCache = new Map();
-        const INVIDIOUS_INSTANCES = [
-            'https://invidious.f5.si',
-            'https://inv.nadeko.net'
-        ];
+        function isDuplicateOrSameSong(candidateTitle, candidateAuthor, referenceList) {
+            if (!candidateTitle) return true;
 
-        async function fetchLiveRecommendedVideos(videoId) {
+            // Filter out multi-hour loop / extended spam videos unless the user is playing one
+            const isMultiHourSpam = /\b([1-9]\d*)\s*(hour|hours|hr|hrs)\b/i.test(candidateTitle) || /\b(seamless\s+loop|extended\s+loop)\b/i.test(candidateTitle);
+            if (isMultiHourSpam) return true;
+
+            const candMeta = extractTrackMetadata(candidateTitle, candidateAuthor);
+            if (!candMeta.fullNorm) return true;
+
+            for (const ref of referenceList) {
+                if (!ref || !ref.title) continue;
+                const refMeta = ref._meta || extractTrackMetadata(ref.title, ref.author || ref.artist || '');
+
+                // 1. Exact normalized full title or core song title match
+                if (candMeta.fullNorm === refMeta.fullNorm) return true;
+                if (candMeta.trackCore.length >= 3 && candMeta.trackCore === refMeta.trackCore) return true;
+
+                // 2. Candidate contains the reference song's core title (e.g. "Never Gonna Give You Up | Live at BBC", "Never Gonna Give You Up (2022 Remaster)")
+                if (refMeta.trackCore.length >= 4) {
+                    if (candMeta.fullNorm.includes(refMeta.trackCore) || candMeta.trackCore.includes(refMeta.trackCore)) {
+                        return true;
+                    }
+                }
+
+                // 3. Reverse containment if same artist and candidate core title is inside reference core title
+                if (candMeta.trackCore.length >= 5 && refMeta.trackCore.includes(candMeta.trackCore)) {
+                    if (!refMeta.artistNorm || !candMeta.artistNorm ||
+                        candMeta.artistNorm.includes(refMeta.artistNorm) ||
+                        refMeta.artistNorm.includes(candMeta.artistNorm) ||
+                        candMeta.fullNorm.includes(refMeta.artistNorm)) {
+                        return true;
+                    }
+                }
+
+                // 4. High token overlap on the song title (catches slight word reorderings / translations / remixes of the same song)
+                if (refMeta.trackTokens.length >= 2) {
+                    const matchedTokens = refMeta.trackTokens.filter(tok => candMeta.fullNorm.split(' ').includes(tok));
+                    if (matchedTokens.length === refMeta.trackTokens.length) {
+                        return true;
+                    }
+                    if (refMeta.trackTokens.length >= 3 && (matchedTokens.length / refMeta.trackTokens.length) >= 0.75) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        function buildDiscoveryQueries(videoTitle, author = '', refreshOffset = 0) {
+            const meta = extractTrackMetadata(videoTitle, author);
+            const queries = [];
+            const isRadioOrMix = /\b(radio|lofi|chillhop|synthwave|mix|playlist|beats\s+to|stream)\b/i.test(meta.cleanTitle);
+
+            const artistVariants = ['official music video', 'top songs', 'greatest hits', 'essential tracks', 'popular tracks'];
+            const genreVariants = ['music hits official video', 'popular songs mix', 'best tracks playlist', 'classic hits'];
+
+            if (isRadioOrMix) {
+                const vibe = meta.detectedGenre || meta.artist || meta.cleanTitle;
+                queries.push(`${vibe} chill beats radio lofi`);
+                queries.push(`${meta.artist || vibe} hip hop beats mix`);
+            } else if (meta.artist) {
+                const suffix = artistVariants[refreshOffset % artistVariants.length];
+                queries.push(`${meta.artist} ${suffix}`);
+                if (meta.detectedGenre) {
+                    const gSuffix = genreVariants[refreshOffset % genreVariants.length];
+                    queries.push(`${meta.detectedGenre} ${gSuffix}`);
+                } else {
+                    const altSuffix = artistVariants[(refreshOffset + 1) % artistVariants.length];
+                    queries.push(`${meta.artist} ${altSuffix}`);
+                }
+            } else if (meta.detectedGenre) {
+                const gSuffix = genreVariants[refreshOffset % genreVariants.length];
+                queries.push(`${meta.detectedGenre} ${gSuffix}`);
+                queries.push(`${meta.cleanTitle} similar songs`);
+            } else if (meta.cleanTitle) {
+                // Fallback when no artist delimiter or author is known: search for related music without locking purely to exact re-uploads
+                const primaryTokens = meta.trackTokens.slice(0, 3).join(' ') || meta.cleanTitle;
+                queries.push(`${primaryTokens} official music video`);
+                queries.push(`${primaryTokens} songs mix`);
+            }
+
+            return [...new Set(queries.filter(Boolean))];
+        }
+
+        // Live YouTube suggestions cache & per-video in-flight tracking
+        const liveSuggestionsCache = new Map();
+        const inFlightSuggestionFetches = new Map();
+        const dismissedSuggestionIds = new Set();
+        let suggestionRefreshCounter = 0;
+        let lastSuggestedVideoId = null;
+
+        async function fetchInvidiousSearchQuery(query, page = 1, timeoutMs = 5500) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const url = `https://invidious.f5.si/api/v1/search?q=${encodeURIComponent(query)}&type=video&page=${page}`;
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                if (!response.ok) return [];
+                const data = await response.json();
+                return (Array.isArray(data) && !data.error) ? data : [];
+            } catch (e) {
+                clearTimeout(timeoutId);
+                return [];
+            }
+        }
+
+        async function fetchLiveRecommendedVideos(videoId, videoTitle = '', author = '', refreshOffset = 0) {
             if (!videoId) return null;
-            if (liveSuggestionsCache.has(videoId)) {
+            if (refreshOffset === 0 && liveSuggestionsCache.has(videoId) && liveSuggestionsCache.get(videoId).length > 0) {
                 return liveSuggestionsCache.get(videoId);
             }
 
-            for (const instance of INVIDIOUS_INSTANCES) {
-                try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 3500);
-                    const response = await fetch(`${instance}/api/v1/videos/${videoId}`, {
-                        signal: controller.signal
-                    });
-                    clearTimeout(timeoutId);
+            const currentMeta = extractTrackMetadata(videoTitle, author);
+            const referenceTracks = [
+                { id: videoId, title: videoTitle, author: author || currentMeta.artist, _meta: currentMeta },
+                ...queue.map(q => ({ ...q, _meta: extractTrackMetadata(q.title, q.author || '') }))
+            ];
 
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (Array.isArray(data.recommendedVideos) && data.recommendedVideos.length > 0) {
-                            const recs = data.recommendedVideos
-                                .filter(v => v && v.videoId && v.title)
-                                .map(v => ({
-                                    id: v.videoId,
-                                    title: v.title,
-                                    artist: v.author || '',
-                                    genre: 'Live Recommendation',
-                                    reason: 'Up Next on YouTube',
-                                    isLive: true
-                                }));
-                            if (recs.length > 0) {
-                                liveSuggestionsCache.set(videoId, recs);
-                                return recs;
-                            }
+            const queries = buildDiscoveryQueries(videoTitle, author, refreshOffset);
+            const page = (refreshOffset >= 2) ? 2 : 1;
+            console.log(`%c[Suggestion API]%c Fetching discovery recommendations for "${videoTitle || videoId}" (${videoId}) via queries:`, 'color: #ef4444; font-weight: bold;', 'color: inherit;', queries);
+
+            // 1. Primary: Run discovery queries in parallel (artist tracks + genre/vibe tracks) and filter out any version of the currently playing song
+            try {
+                const searchPromises = queries.slice(0, 2).map(q => fetchInvidiousSearchQuery(q, page));
+                const resultsArrays = await Promise.all(searchPromises);
+
+                // Interleave results from primary artist query and secondary genre/vibe query for balanced variety
+                const rawCandidates = [];
+                const maxLen = Math.max(0, ...resultsArrays.map(arr => arr.length));
+                for (let i = 0; i < maxLen; i++) {
+                    for (let qIdx = 0; qIdx < resultsArrays.length; qIdx++) {
+                        if (resultsArrays[qIdx][i]) {
+                            rawCandidates.push({ raw: resultsArrays[qIdx][i], queryIndex: qIdx });
                         }
                     }
-                } catch (e) {
-                    // Try next mirror
                 }
+
+                const acceptedRecs = [];
+                const seenIds = new Set([videoId, ...queue.map(q => q.id)]);
+
+                for (const { raw: v, queryIndex } of rawCandidates) {
+                    if (!v || v.type !== 'video' || !v.videoId || !v.title) continue;
+                    if (seenIds.has(v.videoId)) continue;
+                    if (refreshOffset > 0 && dismissedSuggestionIds.has(v.videoId)) continue;
+
+                    // Reject if this candidate is the same song as the currently playing video, a queued track, or an already accepted suggestion
+                    if (isDuplicateOrSameSong(v.title, v.author || '', [...referenceTracks, ...acceptedRecs])) {
+                        continue;
+                    }
+
+                    seenIds.add(v.videoId);
+                    const candMeta = extractTrackMetadata(v.title, v.author || '');
+                    const isSameArtist = currentMeta.artistNorm &&
+                        (candMeta.artistNorm.includes(currentMeta.artistNorm) || currentMeta.artistNorm.includes(candMeta.artistNorm));
+                    const dur = v.liveNow ? 'Live' : (v.lengthSeconds ? formatTime(v.lengthSeconds) : '');
+
+                    acceptedRecs.push({
+                        id: v.videoId,
+                        title: v.title,
+                        artist: v.author || candMeta.artist || '',
+                        genre: isSameArtist ? `More from ${currentMeta.artist}` : (currentMeta.detectedGenre || 'Recommended'),
+                        reason: queryIndex === 0 ? 'More from Artist' : 'Similar Vibe',
+                        duration: dur,
+                        isLive: true,
+                        _meta: candMeta
+                    });
+                }
+
+                if (acceptedRecs.length > 0) {
+                    const cleanRecs = acceptedRecs.map(({ _meta, ...rest }) => rest);
+                    console.log(`%c[Suggestion API]%c Filtered & verified ${cleanRecs.length} distinct recommendations.`, 'color: #10b981; font-weight: bold;', 'color: inherit;', cleanRecs[0]);
+                    liveSuggestionsCache.set(videoId, cleanRecs);
+                    return cleanRecs;
+                }
+            } catch (err) {
+                // Proceed to secondary fallback
             }
+
+            // 2. Secondary fallback: Invidious video endpoint (only if valid recommendedVideos without companion error)
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 4000);
+                const response = await fetch(`https://invidious.f5.si/api/v1/videos/${encodeURIComponent(videoId)}`, {
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (!data.error && Array.isArray(data.recommendedVideos) && data.recommendedVideos.length > 0) {
+                        const acceptedRecs = [];
+                        const seenIds = new Set([videoId, ...queue.map(q => q.id)]);
+                        for (const v of data.recommendedVideos) {
+                            if (!v || !v.videoId || !v.title || seenIds.has(v.videoId)) continue;
+                            if (isDuplicateOrSameSong(v.title, v.author || '', [...referenceTracks, ...acceptedRecs])) continue;
+                            seenIds.add(v.videoId);
+                            const dur = v.liveNow ? 'Live' : (v.lengthSeconds ? formatTime(v.lengthSeconds) : '');
+                            acceptedRecs.push({
+                                id: v.videoId,
+                                title: v.title,
+                                artist: v.author || '',
+                                genre: 'Live Recommendation',
+                                reason: 'YouTube Recommendation',
+                                duration: dur,
+                                isLive: true,
+                                _meta: extractTrackMetadata(v.title, v.author || '')
+                            });
+                        }
+                        if (acceptedRecs.length > 0) {
+                            const cleanRecs = acceptedRecs.map(({ _meta, ...rest }) => rest);
+                            liveSuggestionsCache.set(videoId, cleanRecs);
+                            return cleanRecs;
+                        }
+                    }
+                }
+            } catch (e) {
+                // Silently ignore companion or network errors
+            }
+
+            console.info('[Suggestion API] No live recommendations returned for this video.');
             return null;
         }
 
-        async function triggerLiveSuggestionFetch(videoId) {
-            if (!videoId || liveSuggestionsCache.has(videoId)) return;
-            try {
-                const recs = await fetchLiveRecommendedVideos(videoId);
-                if (recs && recs.length > 0) {
-                    liveSuggestionsCache.set(videoId, recs);
-                    // If user is currently playing this last video, smoothly update to live recommendation
-                    if (currentIndex >= 0 && currentIndex === queue.length - 1 && queue[currentIndex]?.id === videoId) {
-                        pickNextSuggestion(true);
+        function getActiveVideoContext() {
+            const currentVideo = (currentIndex >= 0 && queue[currentIndex]) ? queue[currentIndex] : queue[queue.length - 1];
+            if (!currentVideo) return null;
+            let author = currentVideo.author || '';
+            if (!author && player && typeof player.getVideoData === 'function') {
+                try {
+                    const data = player.getVideoData();
+                    if (data && data.video_id === currentVideo.id && data.author) {
+                        author = data.author;
+                        currentVideo.author = author;
+                    }
+                } catch (e) {}
+            }
+            return { video: currentVideo, author };
+        }
+
+        async function triggerLiveSuggestionFetch(videoId, title = '', author = '', refreshOffset = 0) {
+            if (!videoId) return;
+            if (refreshOffset === 0 && liveSuggestionsCache.has(videoId) && liveSuggestionsCache.get(videoId).length > 0) {
+                const activeCtx = getActiveVideoContext();
+                if (activeCtx && activeCtx.video && activeCtx.video.id === videoId) {
+                    updateSuggestionsList();
+                    renderQueue();
+                }
+                return;
+            }
+            if (inFlightSuggestionFetches.has(videoId)) {
+                return inFlightSuggestionFetches.get(videoId);
+            }
+
+            const fetchPromise = (async () => {
+                try {
+                    const recs = await fetchLiveRecommendedVideos(videoId, title, author, refreshOffset);
+                    liveSuggestionsCache.set(videoId, (recs && recs.length > 0) ? recs : []);
+                } catch (e) {
+                    console.warn('[Suggestion API] Error fetching live suggestions:', e);
+                    liveSuggestionsCache.set(videoId, []);
+                } finally {
+                    inFlightSuggestionFetches.delete(videoId);
+                    const activeCtx = getActiveVideoContext();
+                    if (activeCtx && activeCtx.video && activeCtx.video.id === videoId) {
+                        updateSuggestionsList();
                         renderQueue();
                     }
-                } else {
-                    liveSuggestionsCache.set(videoId, []);
                 }
-            } catch (e) {
-                liveSuggestionsCache.set(videoId, []);
-            }
+            })();
+
+            inFlightSuggestionFetches.set(videoId, fetchPromise);
+            return fetchPromise;
         }
 
-        function getAvailableSuggestions() {
-            return suggestionCatalog.filter(item => !queue.some(q => q.id === item.id));
-        }
-
-        function pickNextSuggestion(forceNew = false) {
-            const currentVideo = queue[currentIndex];
-            if (!currentVideo) {
-                currentSuggestion = null;
-                return null;
+        function updateSuggestionsList(forceNew = false) {
+            const ctx = getActiveVideoContext();
+            if (!ctx || !ctx.video) {
+                currentSuggestions = [];
+                lastSuggestedVideoId = null;
+                return [];
             }
 
-            // 1. Check if we have live YouTube recommendations for current video
-            if (liveSuggestionsCache.has(currentVideo.id)) {
-                const liveList = (liveSuggestionsCache.get(currentVideo.id) || []).filter(item => !queue.some(q => q.id === item.id));
-                if (liveList.length > 0) {
-                    if (!forceNew && currentSuggestion && liveList.some(s => s.id === currentSuggestion.id)) {
-                        return currentSuggestion;
-                    }
-                    const pool = (forceNew && currentSuggestion) ? liveList.filter(s => s.id !== currentSuggestion.id) : liveList;
-                    const candidates = pool.length > 0 ? pool : liveList;
-                    currentSuggestion = candidates[Math.floor(Math.random() * candidates.length)];
-                    return currentSuggestion;
-                }
-            } else {
-                // Not yet fetched for this video: trigger async fetch in background
-                triggerLiveSuggestionFetch(currentVideo.id);
-            }
-
-            // 2. Smart local catalog fallback (if live not ready, offline, or empty)
-            const available = getAvailableSuggestions();
-            if (available.length === 0) {
-                currentSuggestion = null;
-                return null;
-            }
-
-            if (!forceNew && currentSuggestion && available.some(s => s.id === currentSuggestion.id)) {
-                return currentSuggestion;
-            }
-
-            let author = '';
-            if (player && typeof player.getVideoData === 'function') {
-                const data = player.getVideoData();
-                if (data && data.author) author = data.author;
-            }
-
+            const { video: currentVideo, author } = ctx;
+            lastSuggestedVideoId = currentVideo.id;
             const currentMeta = extractTrackMetadata(currentVideo.title, author);
+            const referenceTracks = [
+                { id: currentVideo.id, title: currentVideo.title, author: author || currentMeta.artist, _meta: currentMeta },
+                ...queue.map(q => ({ ...q, _meta: extractTrackMetadata(q.title, q.author || '') }))
+            ];
 
-            // Score candidate suggestions based on extracted context
-            const scoredCandidates = available.map(candidate => {
-                let score = 0;
-                let reason = 'Curated pick';
-
-                if (currentMeta) {
-                    if (currentMeta.artist && candidate.artist.toLowerCase().includes(currentMeta.artist.toLowerCase())) {
-                        score += 70;
-                        reason = `More from ${candidate.artist}`;
-                    } else if (currentMeta.detectedGenre && candidate.genre.toLowerCase().includes(currentMeta.detectedGenre.toLowerCase())) {
-                        score += 50;
-                        reason = `Similar ${candidate.genre} vibe`;
-                    }
-
-                    for (const kw of candidate.keywords) {
-                        if (currentMeta.searchBlob.includes(kw)) {
-                            score += 15;
-                            if (reason === 'Curated pick') {
-                                reason = `Matches '${kw}'`;
-                            }
-                        }
-                    }
+            // 1. Check live recommendations cache (always re-filtering against current queue & playing song)
+            if (liveSuggestionsCache.has(currentVideo.id)) {
+                const cached = liveSuggestionsCache.get(currentVideo.id) || [];
+                const acceptedLive = [];
+                for (const item of cached) {
+                    if (queue.some(q => q.id === item.id)) continue;
+                    if (dismissedSuggestionIds.has(item.id) && cached.length > 6) continue;
+                    if (isDuplicateOrSameSong(item.title, item.artist || '', [...referenceTracks, ...acceptedLive])) continue;
+                    acceptedLive.push(item);
                 }
+                currentSuggestions = acceptedLive.slice(0, 15);
+                return currentSuggestions;
+            }
 
-                if (currentSuggestion && candidate.id === currentSuggestion.id) {
-                    score -= 100;
-                }
+            // 2. Fetch live suggestions from API in background
+            triggerLiveSuggestionFetch(currentVideo.id, currentVideo.title, author);
+            currentSuggestions = [];
+            return [];
+        }
 
-                score += Math.random() * 8;
-
-                return {
-                    ...candidate,
-                    score,
-                    reason,
-                    isLive: false
-                };
+        function refreshSuggestionsList() {
+            const ctx = getActiveVideoContext();
+            suggestionRefreshCounter++;
+            // Mark currently top visible suggestions as seen so refresh rotates fresh tracks to the top
+            currentSuggestions.slice(0, 4).forEach(item => {
+                if (item && item.id) dismissedSuggestionIds.add(item.id);
             });
+            if (dismissedSuggestionIds.size > 60) {
+                dismissedSuggestionIds.clear();
+            }
 
-            scoredCandidates.sort((a, b) => b.score - a.score);
-            currentSuggestion = scoredCandidates[0];
-            return currentSuggestion;
-        }
-
-        function refreshSuggestion() {
-            pickNextSuggestion(true);
+            if (ctx && ctx.video) {
+                liveSuggestionsCache.delete(ctx.video.id);
+                inFlightSuggestionFetches.delete(ctx.video.id);
+                triggerLiveSuggestionFetch(ctx.video.id, ctx.video.title, ctx.author, suggestionRefreshCounter);
+            }
+            updateSuggestionsList(true);
             renderQueue();
+            showToast("Refreshing recommendations...", "info");
         }
 
-        function addCurrentSuggestion() {
-            if (!currentSuggestion) return;
-            addSuggestionToQueue(currentSuggestion.id, currentSuggestion.title);
-        }
+        function addSuggestionItemToQueue(index, playImmediately = false) {
+            if (index < 0 || index >= currentSuggestions.length) return;
+            const item = currentSuggestions.splice(index, 1)[0];
+            if (!item) return;
 
-        function addSuggestionToQueue(id, title) {
-            if (!id) return;
-            if (queue.some(item => item.id === id)) {
+            if (queue.some(q => q.id === item.id)) {
                 showToast("Video is already in the queue", "info");
                 return;
             }
-            queue.push({ id: id, title: title, addedAt: Date.now() });
-            currentSuggestion = null;
+
+            queue.push({
+                id: item.id,
+                title: item.title,
+                author: item.artist || item.author || '',
+                duration: item.duration || '',
+                addedAt: Date.now()
+            });
             saveQueueToStorage();
+
+            if (playImmediately) {
+                playQueueIndex(queue.length - 1);
+                showToast(`Playing: ${item.title}`, "success");
+            } else {
+                updateSuggestionsList();
+                renderQueue();
+                showToast(`Added to queue: ${item.title}`, "success");
+            }
+        }
+
+        function playAutoNextSuggestion() {
+            updateSuggestionsList();
+            const ctx = getActiveVideoContext();
+            const refTracks = ctx && ctx.video
+                ? [{ id: ctx.video.id, title: ctx.video.title, author: ctx.author }, ...queue]
+                : [...queue];
+
+            let nextVideo = null;
+            while (currentSuggestions.length > 0) {
+                const candidate = currentSuggestions.shift();
+                if (
+                    candidate &&
+                    candidate.id &&
+                    !queue.some(item => item.id === candidate.id) &&
+                    !isDuplicateOrSameSong(candidate.title, candidate.artist || '', refTracks)
+                ) {
+                    nextVideo = candidate;
+                    break;
+                }
+            }
+
+            if (!nextVideo) return false;
+
+            queue.push({
+                id: nextVideo.id,
+                title: nextVideo.title,
+                author: nextVideo.artist || nextVideo.author || '',
+                duration: nextVideo.duration || '',
+                addedAt: Date.now()
+            });
+            saveQueueToStorage();
+            const newIndex = queue.length - 1;
+            playQueueIndex(newIndex);
+            showToast(`Autoplay: ${nextVideo.title}`, "info");
+            return true;
+        }
+
+        function addAllSuggestionsToQueue() {
+            if (currentSuggestions.length === 0) return;
+            let addedCount = 0;
+            while (currentSuggestions.length > 0) {
+                const item = currentSuggestions.shift();
+                if (item && item.id && !queue.some(q => q.id === item.id)) {
+                    queue.push({
+                        id: item.id,
+                        title: item.title,
+                        author: item.artist || item.author || '',
+                        duration: item.duration || '',
+                        addedAt: Date.now()
+                    });
+                    addedCount++;
+                }
+            }
+            saveQueueToStorage();
+            updateSuggestionsList();
             renderQueue();
-            showToast("Added suggested video to queue!", "success");
+            showToast(addedCount > 0 ? `Added ${addedCount} suggested video(s) to queue!` : "Suggestions already in queue", "success");
+        }
+
+        function addCurrentSuggestion() {
+            addSuggestionItemToQueue(0, false);
+        }
+
+        function refreshSuggestion() {
+            refreshSuggestionsList();
         }
 
         if (window.location.protocol === 'file:') {
@@ -691,30 +1016,56 @@
 
         function onPlayerReady() {
             isApiReady = true;
-            renderQueue();
-            loadSavedQueue();
+            if (queue.length > 0 && currentIndex >= 0 && queue[currentIndex]) {
+                if (player && typeof player.cueVideoById === 'function') {
+                    player.cueVideoById(queue[currentIndex].id);
+                }
+                updateCurrentVideoMetadata();
+                showOverlay('tap-to-play');
+                const target = queue[currentIndex];
+                triggerLiveSuggestionFetch(target.id, target.title, target.author || '');
+            }
         }
 
         function onPlayerStateChange(event) {
             const playPauseIcon = document.getElementById('play-pause-icon');
+            const miniPlayIcon = document.getElementById('mini-play-icon');
+            const miniWave = document.getElementById('mini-wave');
+
             if (event.data === YT.PlayerState.PLAYING) {
-                playPauseIcon.className = "fa-solid fa-pause text-sm sm:text-base";
+                if (playPauseIcon) playPauseIcon.className = "fa-solid fa-pause text-sm sm:text-base";
+                if (miniPlayIcon) miniPlayIcon.className = "fa-solid fa-pause text-xs";
+                if (miniWave) miniWave.classList.remove('opacity-0');
                 showOverlay('hidden');
                 startProgressTracking();
                 updateCurrentVideoMetadata();
+                if (queue[currentIndex] && player && typeof player.getVideoData === 'function') {
+                    try {
+                        const vData = player.getVideoData();
+                        if (vData && vData.author && !queue[currentIndex].author) {
+                            queue[currentIndex].author = vData.author;
+                            saveQueueToStorage();
+                        }
+                    } catch (e) {}
+                }
                 if ('mediaSession' in navigator && queue[currentIndex]) {
                     navigator.mediaSession.metadata = new MediaMetadata({
                         title: queue[currentIndex].title,
-                        artist: 'YT Queue Streamer',
+                        artist: queue[currentIndex].author || 'YT Queue Streamer',
                         artwork: [{ src: `https://img.youtube.com/vi/${queue[currentIndex].id}/hqdefault.jpg`, sizes: '480x360', type: 'image/jpeg' }]
                     });
                     navigator.mediaSession.setActionHandler('previoustrack', playPrevious);
                     navigator.mediaSession.setActionHandler('nexttrack', playNext);
                 }
             } else if (event.data === YT.PlayerState.PAUSED) {
-                playPauseIcon.className = "fa-solid fa-play ml-0.5 text-sm sm:text-base";
+                if (playPauseIcon) playPauseIcon.className = "fa-solid fa-play ml-0.5 text-sm sm:text-base";
+                if (miniPlayIcon) miniPlayIcon.className = "fa-solid fa-play ml-0.5 text-xs";
+                if (miniWave) miniWave.classList.add('opacity-0');
                 stopProgressTracking();
             } else if (event.data === YT.PlayerState.ENDED) {
+                if (playPauseIcon) playPauseIcon.className = "fa-solid fa-play ml-0.5 text-sm sm:text-base";
+                if (miniPlayIcon) miniPlayIcon.className = "fa-solid fa-play ml-0.5 text-xs";
+                if (miniWave) miniWave.classList.add('opacity-0');
                 stopProgressTracking();
                 handleVideoEnded();
             }
@@ -755,26 +1106,55 @@
             return (match && match[2].length === 11) ? match[2] : null;
         }
 
-        async function fetchVideoTitle(videoId) {
+        async function fetchVideoDetails(videoId) {
+            // 1. Try Invidious video endpoint first for duration, title, and channel
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3500);
+                const response = await fetch(`https://invidious.f5.si/api/v1/videos/${encodeURIComponent(videoId)}`, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.title) {
+                        const dur = data.liveNow ? 'Live' : (data.lengthSeconds ? formatTime(data.lengthSeconds) : '');
+                        return { title: data.title, author: data.author || '', duration: dur };
+                    }
+                }
+            } catch (e) {
+                // Proceed to oEmbed fallback
+            }
+
+            // 2. YouTube official oEmbed fallback
             try {
                 const response = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
                 if (response.ok) {
                     const data = await response.json();
-                    if (data && data.title) return data.title;
+                    if (data && data.title) {
+                        return { title: data.title, author: data.author_name || '', duration: '' };
+                    }
                 }
             } catch (e) {
                 console.warn("YouTube oEmbed fetch failed, trying fallback...", e);
             }
+
+            // 3. noembed fallback
             try {
                 const response = await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`);
                 if (response.ok) {
                     const data = await response.json();
-                    if (data && data.title) return data.title;
+                    if (data && data.title) {
+                        return { title: data.title, author: data.author_name || '', duration: '' };
+                    }
                 }
             } catch (e) {
                 console.warn("Could not fetch oEmbed title fallback.", e);
             }
-            return `YouTube Video (${videoId})`;
+            return { title: `YouTube Video (${videoId})`, author: '', duration: '' };
+        }
+
+        async function fetchVideoTitle(videoId) {
+            const details = await fetchVideoDetails(videoId);
+            return details.title;
         }
 
         async function addVideoToQueue(event) {
@@ -797,10 +1177,12 @@
             input.blur();
             showToast("Fetching video details...", "info");
 
-            const title = await fetchVideoTitle(videoId);
-            queue.push({ id: videoId, title: title, addedAt: Date.now() });
+            const { title, author, duration } = await fetchVideoDetails(videoId);
+            queue.push({ id: videoId, title: title, author: author, duration: duration || '', addedAt: Date.now() });
             saveQueueToStorage();
+            updateSuggestionsList();
             renderQueue();
+            triggerLiveSuggestionFetch(videoId, title, author);
 
             if (currentIndex === -1 && queue.length === 1) {
                 playQueueIndex(0);
@@ -816,20 +1198,73 @@
             }
         }
 
+        let isResolvingDurations = false;
+        async function resolveMissingQueueDurations() {
+            if (isResolvingDurations || queue.length === 0) return;
+            const itemsNeedingDuration = queue.filter(item => !item.duration || item.duration === '--:--');
+            if (itemsNeedingDuration.length === 0) return;
+            isResolvingDurations = true;
+
+            try {
+                let updated = false;
+                for (const item of itemsNeedingDuration) {
+                    if (item.duration && item.duration !== '--:--') continue;
+                    try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 3500);
+                        const res = await fetch(`https://invidious.f5.si/api/v1/videos/${encodeURIComponent(item.id)}`, { signal: controller.signal });
+                        clearTimeout(timeoutId);
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data) {
+                                const dur = data.liveNow ? 'Live' : (data.lengthSeconds ? formatTime(data.lengthSeconds) : '');
+                                if (dur) {
+                                    item.duration = dur;
+                                    updated = true;
+                                }
+                                if (data.author && !item.author) {
+                                    item.author = data.author;
+                                    updated = true;
+                                }
+                            }
+                        }
+                    } catch (e) {}
+                }
+                if (updated) {
+                    saveQueueToStorage();
+                    renderQueue();
+                }
+            } finally {
+                isResolvingDurations = false;
+            }
+        }
+
         function renderQueue() {
             const container = document.getElementById('queue-container');
             const countBadge = document.getElementById('queue-count');
-            countBadge.innerText = `${queue.length} item${queue.length === 1 ? '' : 's'}`;
+            const mobileHeaderCount = document.getElementById('mobile-header-queue-count');
+            const toolbarClearBtn = document.getElementById('toolbar-clear-all-btn');
+            const countText = `${queue.length} item${queue.length === 1 ? '' : 's'}`;
+            if (countBadge) countBadge.innerText = countText;
+            if (mobileHeaderCount) mobileHeaderCount.innerText = countText;
+
+            if (toolbarClearBtn) {
+                toolbarClearBtn.disabled = queue.length === 0;
+                toolbarClearBtn.classList.toggle('opacity-40', queue.length === 0);
+                toolbarClearBtn.classList.toggle('pointer-events-none', queue.length === 0);
+            }
 
             if (queue.length === 0) {
-                currentSuggestion = null;
+                currentSuggestions = [];
+                lastSuggestedVideoId = null;
                 container.innerHTML = `
-                    <div id="queue-empty-state" class="h-full flex flex-col items-center justify-center text-center text-slate-500 p-4">
+                    <div id="queue-empty-state" class="py-10 md:h-full flex flex-col items-center justify-center text-center text-slate-500 p-4">
                         <i class="fa-solid fa-layer-group text-2xl sm:text-3xl mb-2 opacity-40"></i>
                         <p class="text-xs font-medium">Your queue is empty</p>
                         <p class="text-[11px] text-slate-600 mt-0.5">Paste a YouTube URL above to add videos.</p>
                     </div>
                 `;
+                syncMobileMiniPlayerVisibility();
                 return;
             }
 
@@ -839,6 +1274,13 @@
                 const activeClass = isPlaying ? 'bg-red-600/10 border-red-500/40 text-white shadow-md' : 'bg-slate-900/80 border-slate-800/80 text-slate-300 hover:bg-slate-900';
                 const safeTitle = escapeHtml(item.title);
                 const safeId = escapeHtml(item.id);
+                const safeAuthor = escapeHtml(item.author || '');
+                const safeDuration = escapeHtml(item.duration || '');
+
+                const durationBadge = safeDuration ? `
+                    <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/85 backdrop-blur-xs text-[9px] font-semibold text-slate-200 leading-none shadow-sm tracking-tight pointer-events-none">
+                        ${safeDuration}
+                    </span>` : '';
 
                 html += `
                     <div class="group relative flex items-center justify-between p-2.5 sm:p-3 rounded-xl border ${activeClass} transition-all">
@@ -850,86 +1292,157 @@
                             <div class="relative w-14 h-9 sm:w-16 sm:h-10 bg-slate-800 rounded-lg overflow-hidden shrink-0 border border-slate-700/50 flex items-center justify-center">
                                 <img src="https://img.youtube.com/vi/${safeId}/hqdefault.jpg" onerror="this.src='https://placehold.co/120x90/1e293b/64748b?text=YT'" class="w-full h-full object-cover" alt="Thumbnail">
                                 ${isPlaying ? '<div class="absolute inset-0 bg-red-600/40 flex items-center justify-center"><i class="fa-solid fa-volume-high text-white text-xs animate-pulse"></i></div>' : ''}
+                                ${durationBadge}
                             </div>
                             <div class="min-w-0 flex-1">
                                 <div class="text-xs font-semibold truncate ${isPlaying ? 'text-red-400' : 'text-slate-200'}">${safeTitle}</div>
-                                <div class="text-[10px] text-slate-500">ID: ${safeId}</div>
+                                <div class="text-[10px] text-slate-500 mt-0.5 flex items-center space-x-1.5 truncate">
+                                    ${safeAuthor ? `<span class="truncate max-w-[120px]">${safeAuthor}</span><span>•</span>` : ''}
+                                    ${safeDuration ? `<span class="text-slate-400 font-medium">${safeDuration}</span><span>•</span>` : ''}
+                                    <span>ID: ${safeId}</span>
+                                </div>
                             </div>
                         </div>
-                        <div class="flex items-center space-x-0.5 ml-2 shrink-0">
-                            ${index > 0 ? `<button onclick="moveQueueItem(event, ${index}, ${index - 1})" aria-label="Move track up" class="p-1.5 text-slate-500 hover:text-slate-300 rounded transition-colors" title="Move Up"><i class="fa-solid fa-chevron-up text-xs"></i></button>` : ''}
-                            ${index < queue.length - 1 ? `<button onclick="moveQueueItem(event, ${index}, ${index + 1})" aria-label="Move track down" class="p-1.5 text-slate-500 hover:text-slate-300 rounded transition-colors" title="Move Down"><i class="fa-solid fa-chevron-down text-xs"></i></button>` : ''}
-                            <button onclick="removeFromQueue(event, ${index})" aria-label="Remove track from queue" class="p-1.5 text-slate-500 hover:text-rose-400 rounded transition-colors" title="Remove"><i class="fa-solid fa-xmark text-sm"></i></button>
+                        <div class="flex items-center space-x-1 ml-2 shrink-0">
+                            ${index > 0 ? `<button onclick="moveQueueItem(event, ${index}, ${index - 1})" aria-label="Move track up" class="w-7 h-7 sm:w-6 sm:h-6 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors active:scale-95" title="Move Up"><i class="fa-solid fa-chevron-up text-xs"></i></button>` : ''}
+                            ${index < queue.length - 1 ? `<button onclick="moveQueueItem(event, ${index}, ${index + 1})" aria-label="Move track down" class="w-7 h-7 sm:w-6 sm:h-6 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors active:scale-95" title="Move Down"><i class="fa-solid fa-chevron-down text-xs"></i></button>` : ''}
+                            <button onclick="removeFromQueue(event, ${index})" aria-label="Remove track from queue" class="w-7 h-7 sm:w-6 sm:h-6 flex items-center justify-center text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors active:scale-95" title="Remove"><i class="fa-solid fa-xmark text-sm"></i></button>
                         </div>
                     </div>
                 `;
             });
 
-            // If queue is currently playing the last video, show a suggested video card
-            if (currentIndex === queue.length - 1) {
-                const suggestion = pickNextSuggestion();
-                if (suggestion) {
-                    const safeSugId = escapeHtml(suggestion.id);
-                    const safeSugTitle = escapeHtml(suggestion.title);
-                    const safeSugGenre = escapeHtml(suggestion.artist || suggestion.genre || 'Recommended');
-                    const isLive = Boolean(suggestion.isLive);
-                    const badgeIcon = isLive ? 'fa-brands fa-youtube text-red-500' : 'fa-solid fa-bolt-lightning text-amber-400';
-                    const badgeText = isLive ? 'Live YouTube Up Next' : escapeHtml(suggestion.reason || 'Similar vibe');
+            // Render Suggestions List (YouTube-style Recommendations)
+            const activeCtx = getActiveVideoContext();
+            if (currentSuggestions.length === 0 || (activeCtx && activeCtx.video && lastSuggestedVideoId !== activeCtx.video.id)) {
+                updateSuggestionsList();
+            }
 
-                    html += `
-                        <div class="pt-2 mt-2 border-t border-slate-800/80 animate-fadeIn">
-                            <div class="flex items-center justify-between mb-2 px-1">
-                                <div class="flex items-center space-x-1.5 flex-wrap gap-y-1">
-                                    <span class="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-600/15 text-red-400 border border-red-500/20">
-                                        <i class="fa-solid fa-wand-magic-sparkles text-[9px]"></i>
-                                        <span>Suggested Up Next</span>
-                                    </span>
-                                    <span class="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700/60 truncate max-w-[170px] sm:max-w-none">
-                                        <i class="${badgeIcon} text-[9px] mr-0.5"></i>
-                                        <span>${badgeText}</span>
-                                    </span>
+            const isFetchingCurrentSuggestions = activeCtx && activeCtx.video && inFlightSuggestionFetches.has(activeCtx.video.id);
+
+            if (currentSuggestions.length > 0 || isFetchingCurrentSuggestions) {
+                let suggestionsContentHtml = '';
+
+                if (isFetchingCurrentSuggestions && currentSuggestions.length === 0) {
+                    suggestionsContentHtml = `
+                        <div class="space-y-1.5 animate-fadeIn">
+                            <div class="flex items-center space-x-2.5 p-2 rounded-xl border border-slate-800/40 bg-slate-900/30 animate-pulse">
+                                <div class="w-14 h-9 sm:w-16 sm:h-10 bg-slate-800/80 rounded-lg shrink-0 flex items-center justify-center">
+                                    <i class="fa-brands fa-youtube text-slate-700 text-xs"></i>
                                 </div>
-                                <button onclick="refreshSuggestion()" aria-label="Shuffle suggestion" title="Get another similar suggestion" class="text-[11px] text-slate-400 hover:text-white px-2 py-0.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-colors flex items-center space-x-1.5 shrink-0 ml-1">
-                                    <i class="fa-solid fa-arrows-rotate text-[10px]"></i>
-                                    <span class="hidden sm:inline">Shuffle</span>
-                                </button>
+                                <div class="min-w-0 flex-1 space-y-2 py-0.5">
+                                    <div class="h-2.5 bg-slate-800/90 rounded w-3/4"></div>
+                                    <div class="h-2 bg-slate-800/50 rounded w-1/3"></div>
+                                </div>
                             </div>
-                            <div class="group relative flex items-center justify-between p-2.5 sm:p-3 rounded-xl border border-dashed border-red-500/30 bg-gradient-to-r from-red-950/20 via-slate-900/60 to-slate-900/40 hover:border-red-500/50 transition-all">
-                                <div class="flex items-center space-x-3 min-w-0 flex-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-red-500 rounded-lg p-1 -m-1"
-                                     role="button" tabindex="0"
-                                     aria-label="Add suggested video ${safeSugTitle} to queue"
-                                     onclick="addCurrentSuggestion()"
-                                     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();addCurrentSuggestion();}">
-                                    <div class="relative w-14 h-9 sm:w-16 sm:h-10 bg-slate-800 rounded-lg overflow-hidden shrink-0 border border-slate-700/50 flex items-center justify-center">
-                                        <img src="https://img.youtube.com/vi/${safeSugId}/hqdefault.jpg" onerror="this.src='https://placehold.co/120x90/1e293b/64748b?text=YT'" class="w-full h-full object-cover" alt="Thumbnail">
-                                        <div class="absolute inset-0 bg-slate-950/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <i class="fa-solid fa-plus text-white text-xs"></i>
-                                        </div>
-                                    </div>
-                                    <div class="min-w-0 flex-1">
-                                        <div class="text-xs font-semibold truncate text-slate-200 group-hover:text-red-400 transition-colors">${safeSugTitle}</div>
-                                        <div class="flex items-center space-x-2 text-[10px] text-slate-400 mt-0.5">
-                                            <span class="text-slate-400 font-medium">${safeSugGenre}</span>
-                                            <span class="text-slate-600">•</span>
-                                            <span class="text-red-400/90 font-medium">Click to queue</span>
-                                        </div>
-                                    </div>
+                            <div class="flex items-center space-x-2.5 p-2 rounded-xl border border-slate-800/40 bg-slate-900/30 animate-pulse">
+                                <div class="w-14 h-9 sm:w-16 sm:h-10 bg-slate-800/80 rounded-lg shrink-0 flex items-center justify-center">
+                                    <i class="fa-brands fa-youtube text-slate-700 text-xs"></i>
                                 </div>
-                                <div class="ml-2 shrink-0">
-                                    <button onclick="addCurrentSuggestion()" aria-label="Add suggested track to queue" title="Add to Queue" class="px-2.5 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-medium transition-all shadow-md shadow-red-600/20 active:scale-95 flex items-center space-x-1">
-                                        <i class="fa-solid fa-plus text-[10px]"></i>
-                                        <span class="text-xs">Add</span>
-                                    </button>
+                                <div class="min-w-0 flex-1 space-y-2 py-0.5">
+                                    <div class="h-2.5 bg-slate-800/90 rounded w-2/3"></div>
+                                    <div class="h-2 bg-slate-800/50 rounded w-1/4"></div>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2.5 p-2 rounded-xl border border-slate-800/40 bg-slate-900/30 animate-pulse">
+                                <div class="w-14 h-9 sm:w-16 sm:h-10 bg-slate-800/80 rounded-lg shrink-0 flex items-center justify-center">
+                                    <i class="fa-brands fa-youtube text-slate-700 text-xs"></i>
+                                </div>
+                                <div class="min-w-0 flex-1 space-y-2 py-0.5">
+                                    <div class="h-2.5 bg-slate-800/90 rounded w-4/5"></div>
+                                    <div class="h-2 bg-slate-800/50 rounded w-2/5"></div>
                                 </div>
                             </div>
                         </div>
                     `;
+                } else {
+                    let suggestionsHtml = '';
+                    currentSuggestions.forEach((sug, index) => {
+                        const safeId = escapeHtml(sug.id);
+                        const safeTitle = escapeHtml(sug.title);
+                        const safeAuthor = escapeHtml(sug.artist || sug.genre || 'YouTube');
+                        const safeDuration = escapeHtml(sug.duration || '');
+
+                        const durationBadge = safeDuration ? `
+                            <span class="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/85 backdrop-blur-xs text-[9px] font-semibold text-slate-200 leading-none shadow-sm tracking-tight pointer-events-none">
+                                ${safeDuration}
+                            </span>` : '';
+
+                        suggestionsHtml += `
+                            <div class="group relative flex items-center justify-between p-2 rounded-xl border border-slate-800/70 bg-slate-900/40 hover:bg-slate-900 hover:border-slate-700/80 transition-all">
+                                <div class="flex items-center space-x-2.5 min-w-0 flex-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-red-500 rounded-lg p-1 -m-1" 
+                                     role="button" tabindex="0" 
+                                     onclick="addSuggestionItemToQueue(${index}, true)"
+                                     title="Click to play immediately">
+                                    <div class="relative w-14 h-9 sm:w-16 sm:h-10 bg-slate-800 rounded-lg overflow-hidden shrink-0 border border-slate-800/80 flex items-center justify-center">
+                                        <img src="https://img.youtube.com/vi/${safeId}/hqdefault.jpg" onerror="this.src='https://placehold.co/120x90/1e293b/64748b?text=YT'" class="w-full h-full object-cover" alt="Thumbnail">
+                                        <div class="absolute inset-0 bg-slate-950/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <i class="fa-solid fa-play text-white text-xs"></i>
+                                        </div>
+                                        ${durationBadge}
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="text-xs font-medium truncate text-slate-300 group-hover:text-red-400 transition-colors">${safeTitle}</div>
+                                        <div class="text-[10px] text-slate-500 truncate mt-0.5 flex items-center space-x-1.5">
+                                            <span class="truncate">${safeAuthor}</span>
+                                            ${safeDuration ? `<span>•</span><span class="text-slate-400 font-medium">${safeDuration}</span>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-1 ml-2 shrink-0">
+                                    <button onclick="addSuggestionItemToQueue(${index}, false)" aria-label="Add to queue" title="Add to Queue" class="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors active:scale-95">
+                                        <i class="fa-solid fa-plus text-xs"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    suggestionsContentHtml = `
+                        <div class="space-y-1.5">
+                            ${suggestionsHtml}
+                        </div>
+                    `;
                 }
-            } else {
-                currentSuggestion = null;
+
+                const countBadgeHtml = isFetchingCurrentSuggestions && currentSuggestions.length === 0
+                    ? `<span class="text-[11px] text-slate-400 font-medium flex items-center space-x-1"><i class="fa-solid fa-circle-notch fa-spin text-[10px] text-red-500"></i><span class="text-[10px]">Loading...</span></span>`
+                    : `<span class="text-[11px] text-slate-500 font-medium">(${currentSuggestions.length})</span>`;
+
+                const addAllDisabledClass = currentSuggestions.length === 0 ? 'opacity-40 pointer-events-none' : '';
+
+                html += `
+                    <div class="pt-3 mt-3 border-t border-slate-800/80 animate-fadeIn">
+                        <div class="flex items-center justify-between mb-2.5 px-1">
+                            <div class="flex items-center space-x-2">
+                                <span class="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-red-600/15 text-red-400 border border-red-500/20">
+                                    <i class="fa-brands fa-youtube text-red-500 text-xs"></i>
+                                    <span>Recommended for You</span>
+                                </span>
+                                ${countBadgeHtml}
+                            </div>
+                            <div class="flex items-center space-x-1.5">
+                                <button onclick="toggleAutoplay()" aria-label="Toggle Autoplay" title="${isAutoplayEnabled ? 'Autoplay is ON (plays recommendations when queue finishes)' : 'Autoplay is OFF'}" class="text-[11px] px-2.5 py-1 rounded-lg border transition-colors flex items-center space-x-1.5 ${isAutoplayEnabled ? 'bg-red-600/15 text-red-300 border-red-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'}">
+                                    <i class="fa-solid ${isAutoplayEnabled ? 'fa-toggle-on text-red-400' : 'fa-toggle-off'} text-xs"></i>
+                                    <span class="font-medium">Autoplay</span>
+                                </button>
+                                <button onclick="addAllSuggestionsToQueue()" aria-label="Add all suggestions" title="Add all recommendations to queue" class="text-[11px] text-slate-400 hover:text-white px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-colors flex items-center space-x-1 ${addAllDisabledClass}">
+                                    <i class="fa-solid fa-layer-group text-[10px]"></i>
+                                    <span class="hidden sm:inline">Add All</span>
+                                </button>
+                                <button onclick="refreshSuggestionsList()" aria-label="Refresh recommendations" title="Refresh recommendations" class="text-[11px] text-slate-400 hover:text-white px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 transition-colors flex items-center space-x-1">
+                                    <i class="fa-solid fa-arrows-rotate text-[10px] ${isFetchingCurrentSuggestions ? 'animate-spin' : ''}"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        ${suggestionsContentHtml}
+                    </div>
+                `;
             }
 
             container.innerHTML = html;
+            resolveMissingQueueDurations();
         }
 
         function playQueueIndex(index) {
@@ -946,8 +1459,22 @@
                 }
             }
             saveQueueToStorage();
+            updateSuggestionsList();
             renderQueue();
             updateCurrentVideoMetadata();
+
+            // Pre-fetch live YouTube suggestions for current video, upcoming next track & queue end
+            triggerLiveSuggestionFetch(video.id, video.title, video.author || '');
+            if (currentIndex + 1 < queue.length) {
+                const nxt = queue[currentIndex + 1];
+                triggerLiveSuggestionFetch(nxt.id, nxt.title, nxt.author || '');
+            }
+            if (queue.length > 0) {
+                const tail = queue[queue.length - 1];
+                if (tail && tail.id !== video.id && (!queue[currentIndex + 1] || tail.id !== queue[currentIndex + 1].id)) {
+                    triggerLiveSuggestionFetch(tail.id, tail.title, tail.author || '');
+                }
+            }
         }
 
         function handleVideoEnded() {
@@ -955,6 +1482,17 @@
                 playQueueIndex(currentIndex + 1);
             } else if (isLooping && queue.length > 0) {
                 playQueueIndex(0);
+            } else if (isAutoplayEnabled) {
+                const autoPlayed = playAutoNextSuggestion();
+                if (!autoPlayed) {
+                    document.getElementById('current-title').innerText = "Queue finished";
+                    document.getElementById('current-duration').innerText = "--:--";
+                    const timeEl = document.getElementById('current-time');
+                    if (timeEl) timeEl.innerText = "0:00";
+                    const progressBar = document.getElementById('progress-bar');
+                    if (progressBar) progressBar.value = 0;
+                    document.getElementById('player-placeholder').style.opacity = '1';
+                }
             } else {
                 document.getElementById('current-title').innerText = "Queue finished";
                 document.getElementById('current-duration').innerText = "--:--";
@@ -970,13 +1508,22 @@
             if (queue.length === 0) return;
             let nextIdx = currentIndex + 1;
             if (nextIdx >= queue.length) {
-                if (isLooping) nextIdx = 0;
-                else {
+                if (isLooping) {
+                    nextIdx = 0;
+                    playQueueIndex(nextIdx);
+                } else if (isAutoplayEnabled) {
+                    const autoPlayed = playAutoNextSuggestion();
+                    if (!autoPlayed) {
+                        showToast("Reached end of queue", "info");
+                    }
+                    return;
+                } else {
                     showToast("Reached end of queue", "info");
                     return;
                 }
+            } else {
+                playQueueIndex(nextIdx);
             }
-            playQueueIndex(nextIdx);
         }
 
         function playPrevious() {
@@ -1013,6 +1560,16 @@
                 btn.className = "w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-all active:scale-95";
                 showToast("Queue looping disabled", "info");
             }
+            renderQueue();
+        }
+
+        function toggleAutoplay() {
+            isAutoplayEnabled = !isAutoplayEnabled;
+            try {
+                localStorage.setItem('yt_autoplay_enabled', JSON.stringify(isAutoplayEnabled));
+            } catch (e) {}
+            renderQueue();
+            showToast(isAutoplayEnabled ? "Autoplay enabled" : "Autoplay disabled", "info");
         }
 
         function setVolume(val) {
@@ -1042,13 +1599,13 @@
                     currentIndex = -1;
                     stopProgressTracking();
                     if (player && player.stopVideo) player.stopVideo();
-                    document.getElementById('current-title').innerText = "No video playing";
-                    document.getElementById('current-duration').innerText = "--:--";
-                    const timeEl = document.getElementById('current-time');
-                    if (timeEl) timeEl.innerText = "0:00";
-                    const progressBar = document.getElementById('progress-bar');
-                    if (progressBar) progressBar.value = 0;
-                    document.getElementById('player-placeholder').style.opacity = '1';
+                    const playPauseIcon = document.getElementById('play-pause-icon');
+                    const miniPlayIcon = document.getElementById('mini-play-icon');
+                    const miniWave = document.getElementById('mini-wave');
+                    if (playPauseIcon) playPauseIcon.className = "fa-solid fa-play ml-0.5 text-sm sm:text-base";
+                    if (miniPlayIcon) miniPlayIcon.className = "fa-solid fa-play ml-0.5 text-xs";
+                    if (miniWave) miniWave.classList.add('opacity-0');
+                    updateCurrentVideoMetadata();
                     saveQueueToStorage();
                     renderQueue();
                 }
@@ -1057,6 +1614,7 @@
                     currentIndex--;
                 }
                 saveQueueToStorage();
+                updateSuggestionsList();
                 renderQueue();
             }
             showToast("Removed from queue", "info");
@@ -1075,23 +1633,33 @@
         }
 
         function clearQueueCompletely() {
-            if (queue.length === 0) return;
-            if (!confirm(`Are you sure you want to clear all ${queue.length} video(s) from the queue?`)) {
+            if (queue.length === 0) {
+                try {
+                    localStorage.removeItem('yt_queue_data');
+                } catch (e) {}
+                showToast("Queue is already empty", "info");
                 return;
             }
             recentlyClearedQueue = [...queue];
             queue = [];
             currentIndex = -1;
+            currentSuggestions = [];
+            lastSuggestedVideoId = null;
+            dismissedSuggestionIds.clear();
             stopProgressTracking();
-            if (player && player.stopVideo) player.stopVideo();
-            document.getElementById('current-title').innerText = "No video playing";
-            document.getElementById('current-duration').innerText = "--:--";
-            const timeEl = document.getElementById('current-time');
-            if (timeEl) timeEl.innerText = "0:00";
-            const progressBar = document.getElementById('progress-bar');
-            if (progressBar) progressBar.value = 0;
-            document.getElementById('player-placeholder').style.opacity = '1';
+            if (player && typeof player.stopVideo === 'function') {
+                try {
+                    player.stopVideo();
+                } catch (e) {}
+            }
+            const playPauseIcon = document.getElementById('play-pause-icon');
+            const miniPlayIcon = document.getElementById('mini-play-icon');
+            const miniWave = document.getElementById('mini-wave');
+            if (playPauseIcon) playPauseIcon.className = "fa-solid fa-play ml-0.5 text-sm sm:text-base";
+            if (miniPlayIcon) miniPlayIcon.className = "fa-solid fa-play ml-0.5 text-xs";
+            if (miniWave) miniWave.classList.add('opacity-0');
             showOverlay('hidden');
+            updateCurrentVideoMetadata();
             saveQueueToStorage();
             renderQueue();
             showToast("Queue cleared.", "info", undoClearQueue, "Undo");
@@ -1103,6 +1671,7 @@
                 recentlyClearedQueue = null;
                 currentIndex = 0;
                 saveQueueToStorage();
+                updateSuggestionsList();
                 renderQueue();
                 playQueueIndex(0);
                 showToast("Queue restored!", "success");
@@ -1118,19 +1687,31 @@
                 }
             }
             saveQueueToStorage();
+            updateSuggestionsList();
             renderQueue();
             if (currentIndex === -1 && queue.length > 0) {
                 playQueueIndex(0);
             } else {
                 showToast(added > 0 ? `Added ${added} demo tracks!` : "Demo tracks already in queue", "success");
             }
+            if (queue.length > 0) {
+                const tail = queue[queue.length - 1];
+                triggerLiveSuggestionFetch(tail.id, tail.title, tail.author || '');
+            }
         }
 
         function updateCurrentVideoMetadata() {
             const placeholder = document.getElementById('player-placeholder');
+            const miniTitle = document.getElementById('mini-title');
+            const miniThumbnail = document.getElementById('mini-thumbnail');
+            const miniTimeEl = document.getElementById('mini-time');
+            const miniDurEl = document.getElementById('mini-duration');
+
             if (currentIndex >= 0 && queue[currentIndex]) {
                 placeholder.style.opacity = '0';
                 document.getElementById('current-title').innerText = queue[currentIndex].title;
+                if (miniTitle) miniTitle.innerText = queue[currentIndex].title;
+                if (miniThumbnail) miniThumbnail.src = `https://img.youtube.com/vi/${queue[currentIndex].id}/hqdefault.jpg`;
                 updatePlaybackProgress();
             } else {
                 placeholder.style.opacity = '1';
@@ -1140,12 +1721,21 @@
                 if (timeEl) timeEl.innerText = "0:00";
                 const progressBar = document.getElementById('progress-bar');
                 if (progressBar) progressBar.value = 0;
+                if (miniTitle) miniTitle.innerText = "No video playing";
+                if (miniThumbnail) miniThumbnail.src = "https://placehold.co/120x90/1e293b/64748b?text=YT";
+                if (miniTimeEl) miniTimeEl.innerText = "0:00";
+                if (miniDurEl) miniDurEl.innerText = "--:--";
             }
+            syncMobileMiniPlayerVisibility();
         }
 
         function saveQueueToStorage() {
             try {
-                localStorage.setItem('yt_queue_data', JSON.stringify({ queue, currentIndex }));
+                if (!queue || queue.length === 0) {
+                    localStorage.removeItem('yt_queue_data');
+                } else {
+                    localStorage.setItem('yt_queue_data', JSON.stringify({ queue, currentIndex }));
+                }
             } catch (e) {
                 console.warn("Could not save to localStorage", e);
             }
@@ -1159,11 +1749,24 @@
                     if (parsed && Array.isArray(parsed.queue) && parsed.queue.length > 0) {
                         queue = parsed.queue;
                         currentIndex = (parsed.currentIndex >= 0 && parsed.currentIndex < queue.length) ? parsed.currentIndex : 0;
+                        updateSuggestionsList();
                         renderQueue();
                         if (isApiReady && player && player.cueVideoById && queue[currentIndex]) {
                             player.cueVideoById(queue[currentIndex].id);
                             updateCurrentVideoMetadata();
                             showOverlay('tap-to-play');
+                        }
+                        if (queue.length > 0) {
+                            const cur = queue[currentIndex] || queue[0];
+                            triggerLiveSuggestionFetch(cur.id, cur.title, cur.author || '');
+                            if (currentIndex + 1 < queue.length) {
+                                const nxt = queue[currentIndex + 1];
+                                triggerLiveSuggestionFetch(nxt.id, nxt.title, nxt.author || '');
+                            }
+                            const tail = queue[queue.length - 1];
+                            if (tail && tail.id !== cur.id && (!queue[currentIndex + 1] || tail.id !== queue[currentIndex + 1].id)) {
+                                triggerLiveSuggestionFetch(tail.id, tail.title, tail.author || '');
+                            }
                         }
                     }
                 }
@@ -1202,6 +1805,8 @@
                             queue = validItems.map(item => ({
                                 id: extractVideoId(item.id),
                                 title: String(item.title || `YouTube Video (${item.id})`),
+                                author: String(item.author || ''),
+                                duration: String(item.duration || ''),
                                 addedAt: Date.now()
                             }));
                             currentIndex = 0;
@@ -1260,6 +1865,40 @@
                 setTimeout(() => toast.remove(), 300);
             }, actionCallback ? 6000 : 3500);
         }
+
+        function scrollToQueue() {
+            const queueEl = document.getElementById('queue-section');
+            if (queueEl) {
+                queueEl.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        function scrollToPlayer() {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function syncMobileMiniPlayerVisibility() {
+            const miniPlayer = document.getElementById('mobile-mini-player');
+            if (!miniPlayer) return;
+            const isMobile = window.innerWidth < 768;
+            const hasActiveVideo = currentIndex >= 0 && queue[currentIndex];
+            const isScrolled = window.scrollY > 200;
+
+            if (isMobile && hasActiveVideo && isScrolled) {
+                miniPlayer.classList.remove('translate-y-28', 'opacity-0', 'pointer-events-none');
+                miniPlayer.classList.add('translate-y-0', 'opacity-100', 'pointer-events-auto');
+            } else {
+                miniPlayer.classList.remove('translate-y-0', 'opacity-100', 'pointer-events-auto');
+                miniPlayer.classList.add('translate-y-28', 'opacity-0', 'pointer-events-none');
+            }
+        }
+
+        window.addEventListener('scroll', syncMobileMiniPlayerVisibility, { passive: true });
+        window.addEventListener('resize', syncMobileMiniPlayerVisibility, { passive: true });
+
+        // Initialize queue state immediately on page load
+        loadSavedQueue();
+        renderQueue();
     </script>
 </body>
 </html>
