@@ -1,4 +1,4 @@
-const CACHE_NAME = 'yt-queue-pwa-v1.9.0';
+const CACHE_NAME = 'yt-queue-pwa-v1.9.2';
 const APP_SHELL = [
   './',
   './index.html',

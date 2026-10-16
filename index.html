@@ -74,7 +74,7 @@
                     <div class="flex items-center space-x-2">
                         <h1 class="text-base sm:text-lg font-bold tracking-tight text-white leading-tight">YT Queue Streamer</h1>
                         <button type="button" id="appVersionBtn" class="inline-flex items-center px-1.5 py-0.5 rounded font-mono text-[10px] font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 hover:border-red-500/40 transition-all cursor-pointer active:scale-95" title="App Version (Click to check for updates)">
-                            <span id="appVersionText">v1.9.0</span>
+                            <span id="appVersionText">v1.9.2</span>
                         </button>
                     </div>
                     <p class="text-[11px] sm:text-xs text-slate-400">Seamless playback & shared queue</p>
@@ -104,12 +104,27 @@
         </div>
 
         <!-- Player Container -->
-        <div class="relative w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-800 group">
+        <div id="player-container" class="relative w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-800 group select-none">
             <div id="youtube-player" class="w-full h-full absolute inset-0"></div>
+
+            <!-- Video Click Surface for Play / Pause -->
+            <div id="video-click-surface" 
+                 onclick="handleVideoClick(event)" 
+                 ondblclick="handleVideoDblClick(event)" 
+                 class="absolute inset-0 z-10 cursor-pointer flex items-center justify-center select-none"
+                 title="Click to play or pause">
+                <!-- Center Ripple / Pulse Animation Badge -->
+                <div id="video-feedback-badge" 
+                     class="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-950/75 backdrop-blur-md border border-white/20 text-white flex items-center justify-center opacity-0 scale-75 pointer-events-none transition-all duration-300 shadow-2xl">
+                    <i id="video-feedback-icon" class="fa-solid fa-play text-2xl sm:text-3xl ml-1 text-white"></i>
+                </div>
+            </div>
+
             <!-- Dynamic Overlay for Autoplay / Embed Restrictions -->
             <div id="click-to-play-overlay" onclick="retryPlayback()" class="absolute inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center p-5 text-center cursor-pointer transition-all duration-300 opacity-0 pointer-events-none z-20"></div>
+
             <!-- Empty State Overlay -->
-            <div id="player-placeholder" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-slate-400 p-6 text-center transition-opacity duration-300 z-10">
+            <div id="player-placeholder" onclick="handlePlaceholderClick()" class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-slate-400 p-6 text-center transition-opacity duration-300 z-30 cursor-pointer">
                 <div class="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mb-3 text-slate-500 group-hover:text-red-500 transition-colors">
                     <i class="fa-solid fa-play text-xl sm:text-2xl ml-1"></i>
                 </div>
@@ -164,6 +179,9 @@
                     </div>
                     <button onclick="toggleLoop()" id="loop-btn" aria-label="Toggle loop queue" title="Toggle Loop Queue" class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-all active:scale-95">
                         <i class="fa-solid fa-rotate-right text-xs sm:text-sm"></i>
+                    </button>
+                    <button onclick="toggleFullscreen()" id="fullscreen-btn" aria-label="Toggle fullscreen" title="Toggle Fullscreen" class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-all active:scale-95">
+                        <i class="fa-solid fa-expand text-xs sm:text-sm" id="fullscreen-icon"></i>
                     </button>
                     <button onclick="clearQueueCompletely()" aria-label="Clear entire queue" title="Clear Entire Queue" class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 flex items-center justify-center transition-all active:scale-95">
                         <i class="fa-solid fa-trash-can text-xs sm:text-sm"></i>
@@ -994,6 +1012,115 @@
             overlay.style.pointerEvents = 'auto';
         }
 
+        // Placeholder & Video Click / Interaction Handlers
+        function setPlaceholderVisible(visible) {
+            const placeholder = document.getElementById('player-placeholder');
+            if (!placeholder) return;
+            if (visible) {
+                placeholder.style.opacity = '1';
+                placeholder.style.pointerEvents = 'auto';
+                placeholder.classList.remove('pointer-events-none');
+            } else {
+                placeholder.style.opacity = '0';
+                placeholder.style.pointerEvents = 'none';
+                placeholder.classList.add('pointer-events-none');
+            }
+        }
+
+        let feedbackTimeout = null;
+        function showVideoFeedback(isPlaying) {
+            const badge = document.getElementById('video-feedback-badge');
+            const icon = document.getElementById('video-feedback-icon');
+            if (!badge || !icon) return;
+
+            if (isPlaying) {
+                icon.className = "fa-solid fa-play text-2xl sm:text-3xl ml-1 text-white";
+            } else {
+                icon.className = "fa-solid fa-pause text-2xl sm:text-3xl text-white";
+            }
+
+            badge.classList.remove('opacity-0', 'scale-75');
+            badge.classList.add('opacity-100', 'scale-110');
+
+            if (feedbackTimeout) clearTimeout(feedbackTimeout);
+            feedbackTimeout = setTimeout(() => {
+                badge.classList.remove('opacity-100', 'scale-110');
+                badge.classList.add('opacity-0', 'scale-75');
+            }, 450);
+        }
+
+        function handleVideoClick(event) {
+            if (event) {
+                event.stopPropagation();
+            }
+
+            if (queue.length === 0) {
+                handlePlaceholderClick();
+                return;
+            }
+
+            let isCurrentlyPlaying = false;
+            if (isApiReady && player && typeof player.getPlayerState === 'function') {
+                try {
+                    const state = player.getPlayerState();
+                    isCurrentlyPlaying = (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING);
+                } catch (e) {}
+            }
+
+            // Immediately animate badge to acknowledge click
+            showVideoFeedback(!isCurrentlyPlaying);
+            togglePlayPause();
+        }
+
+        function handleVideoDblClick(event) {
+            if (event) {
+                event.stopPropagation();
+            }
+            toggleFullscreen();
+        }
+
+        function handlePlaceholderClick() {
+            if (queue.length > 0) {
+                if (currentIndex === -1) {
+                    playQueueIndex(0);
+                } else {
+                    togglePlayPause();
+                }
+            } else {
+                const input = document.getElementById('video-url-input');
+                if (input) {
+                    input.focus();
+                    input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                showToast("Paste a YouTube link or click Demo Queue to start!", "info");
+            }
+        }
+
+        function toggleFullscreen() {
+            const container = document.getElementById('player-container');
+            if (!container) return;
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (container.requestFullscreen) {
+                    container.requestFullscreen().catch(() => {});
+                } else if (container.webkitRequestFullscreen) {
+                    container.webkitRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen().catch(() => {});
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            }
+        }
+
+        function updateFullscreenIcon() {
+            const icon = document.getElementById('fullscreen-icon');
+            if (!icon) return;
+            const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            icon.className = isFs ? "fa-solid fa-compress text-xs sm:text-sm" : "fa-solid fa-expand text-xs sm:text-sm";
+        }
+
         // Load YouTube IFrame API
         const tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
@@ -1210,6 +1337,7 @@
         function handleQueueKeydown(event, index) {
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
+                event.stopPropagation();
                 playQueueIndex(index);
             }
         }
@@ -1507,7 +1635,7 @@
                     if (timeEl) timeEl.innerText = "0:00";
                     const progressBar = document.getElementById('progress-bar');
                     if (progressBar) progressBar.value = 0;
-                    document.getElementById('player-placeholder').style.opacity = '1';
+                    setPlaceholderVisible(true);
                 }
             } else {
                 document.getElementById('current-title').innerText = "Queue finished";
@@ -1516,7 +1644,7 @@
                 if (timeEl) timeEl.innerText = "0:00";
                 const progressBar = document.getElementById('progress-bar');
                 if (progressBar) progressBar.value = 0;
-                document.getElementById('player-placeholder').style.opacity = '1';
+                setPlaceholderVisible(true);
             }
         }
 
@@ -1549,11 +1677,21 @@
         }
 
         function togglePlayPause() {
-            if (!isApiReady || !player) return;
+            if (!isApiReady || !player) {
+                if (queue.length > 0) {
+                    retryPlayback();
+                }
+                return;
+            }
             try {
-                const state = player.getPlayerState();
-                if (state === YT.PlayerState.PLAYING) {
+                const state = typeof player.getPlayerState === 'function' ? player.getPlayerState() : -1;
+                if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING) {
                     player.pauseVideo();
+                } else if (state === YT.PlayerState.ENDED) {
+                    if (typeof player.seekTo === 'function') {
+                        player.seekTo(0);
+                    }
+                    player.playVideo();
                 } else {
                     if (currentIndex === -1 && queue.length > 0) {
                         playQueueIndex(0);
@@ -1724,13 +1862,13 @@
             const miniDurEl = document.getElementById('mini-duration');
 
             if (currentIndex >= 0 && queue[currentIndex]) {
-                placeholder.style.opacity = '0';
+                setPlaceholderVisible(false);
                 document.getElementById('current-title').innerText = queue[currentIndex].title;
                 if (miniTitle) miniTitle.innerText = queue[currentIndex].title;
                 if (miniThumbnail) miniThumbnail.src = `https://img.youtube.com/vi/${queue[currentIndex].id}/hqdefault.jpg`;
                 updatePlaybackProgress();
             } else {
-                placeholder.style.opacity = '1';
+                setPlaceholderVisible(true);
                 document.getElementById('current-title').innerText = "No video playing";
                 document.getElementById('current-duration').innerText = "--:--";
                 const timeEl = document.getElementById('current-time');
@@ -1767,9 +1905,9 @@
                         currentIndex = (parsed.currentIndex >= 0 && parsed.currentIndex < queue.length) ? parsed.currentIndex : 0;
                         updateSuggestionsList();
                         renderQueue();
+                        updateCurrentVideoMetadata();
                         if (isApiReady && player && player.cueVideoById && queue[currentIndex]) {
                             player.cueVideoById(queue[currentIndex].id);
-                            updateCurrentVideoMetadata();
                             showOverlay('tap-to-play');
                         }
                         if (queue.length > 0) {
@@ -1911,13 +2049,125 @@
 
         window.addEventListener('scroll', syncMobileMiniPlayerVisibility, { passive: true });
         window.addEventListener('resize', syncMobileMiniPlayerVisibility, { passive: true });
+        document.addEventListener('fullscreenchange', updateFullscreenIcon);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenIcon);
+
+        // Utility to detect if user is typing in an active text input or editable element
+        function isTypingInField(target) {
+            if (!target) return false;
+            if (target.isContentEditable) return true;
+            const tagName = target.tagName;
+            if (tagName === 'TEXTAREA' || tagName === 'SELECT') return true;
+            if (tagName === 'INPUT') {
+                const type = (target.type || 'text').toLowerCase();
+                return !['range', 'checkbox', 'radio', 'button', 'submit', 'reset'].includes(type);
+            }
+            return false;
+        }
+
+        function seekRelative(seconds) {
+            if (!player || typeof player.getCurrentTime !== 'function' || typeof player.seekTo !== 'function') return;
+            try {
+                const cur = player.getCurrentTime() || 0;
+                const dur = typeof player.getDuration === 'function' ? (player.getDuration() || 0) : 0;
+                const target = Math.max(0, dur > 0 ? Math.min(dur, cur + seconds) : cur + seconds);
+                player.seekTo(target, true);
+                updatePlaybackProgress();
+            } catch (e) {}
+        }
+
+        function adjustVolume(delta) {
+            if (!player || typeof player.getVolume !== 'function' || typeof player.setVolume !== 'function') return;
+            try {
+                const cur = player.getVolume() || 0;
+                const next = Math.max(0, Math.min(100, Math.round(cur + delta)));
+                setVolume(next);
+                const slider = document.getElementById('volume-slider');
+                if (slider) slider.value = next;
+                showToast(`Volume: ${next}%`, 'info');
+            } catch (e) {}
+        }
+
+        // Global keyboard shortcuts: Spacebar & media keys
+        window.addEventListener('keydown', (e) => {
+            // Ignore when typing in text fields
+            if (isTypingInField(e.target) || isTypingInField(document.activeElement)) {
+                return;
+            }
+
+            // Space or K: Play / Pause
+            if (e.code === 'Space' || e.key === ' ' || e.key === 'k' || e.key === 'K') {
+                e.preventDefault();
+                if (e.target && typeof e.target.blur === 'function') {
+                    e.target.blur();
+                }
+                handleVideoClick();
+                return;
+            }
+
+            // ArrowLeft / J: Rewind 5s
+            if (e.key === 'ArrowLeft' || e.key === 'j' || e.key === 'J') {
+                e.preventDefault();
+                seekRelative(-5);
+                return;
+            }
+
+            // ArrowRight / L: Fast-forward 5s
+            if (e.key === 'ArrowRight' || e.key === 'l' || e.key === 'L') {
+                e.preventDefault();
+                seekRelative(5);
+                return;
+            }
+
+            // ArrowUp: Volume +5%
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                adjustVolume(5);
+                return;
+            }
+
+            // ArrowDown: Volume -5%
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                adjustVolume(-5);
+                return;
+            }
+
+            // F: Fullscreen
+            if (e.key === 'f' || e.key === 'F') {
+                e.preventDefault();
+                toggleFullscreen();
+                return;
+            }
+
+            // M: Mute
+            if (e.key === 'm' || e.key === 'M') {
+                e.preventDefault();
+                toggleMute();
+                return;
+            }
+
+            // N: Next track
+            if (e.key === 'n' || e.key === 'N') {
+                e.preventDefault();
+                playNext();
+                return;
+            }
+
+            // P: Previous track
+            if (e.key === 'p' || e.key === 'P') {
+                e.preventDefault();
+                playPrevious();
+                return;
+            }
+        });
 
         // Initialize queue state immediately on page load
         loadSavedQueue();
         renderQueue();
 
         // App Version & Service Worker Management
-        const APP_VERSION = 'v1.9.0';
+        const APP_VERSION = 'v1.9.2';
         const versionText = document.getElementById('appVersionText');
         const versionBtn = document.getElementById('appVersionBtn');
         const updateBanner = document.getElementById('updateBanner');
